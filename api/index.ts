@@ -1,7 +1,7 @@
 import app from "../src/app";
 
 export const config = {
-  runtime: "nodejs20.x",
+  runtime: "nodejs",
   maxDuration: 60,
   memory: 1024,
 };
