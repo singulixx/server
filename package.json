@@ -19,6 +19,7 @@
     "seed": "tsx src/seed.ts",
     "lint": "eslint .",
     "user:create": "node --env-file=.env scripts/createUser.js",
+    "user:create:neon": "node --env-file=.env.neon scripts/createUser.js",
     "migrate:init": "prisma migrate dev --name init",
     "migrate:deploy": "prisma migrate deploy",
     "migrate:reset": "prisma migrate reset",

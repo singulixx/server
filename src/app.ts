@@ -4,6 +4,9 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 
+// ⬇️ STATIC IMPORT untuk route yang pasti ada
+import authRouter from "./routes/auth"; // <-- tanpa ekstensi, biar dibundle
+
 const app = express();
 
 /** CORS allowlist (comma-separated) */
@@ -37,38 +40,17 @@ app.use(helmet());
 app.use(compression());
 app.use(express.json({ limit: "4mb" }));
 
-// --- Health ---
+// Health
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// --- Optional route auto-mount (akan dilewati jika file tidak ada) ---
-async function mountOptional(modulePath: string, base: string) {
-  try {
-    const mod = await import(modulePath);
-    const router = (mod?.default ?? mod) as any;
-    if (router) app.use(base, router);
-    // console.log("mounted", base, "=>", modulePath);
-  } catch {
-    // module tidak ditemukan → lewati
-  }
-}
+// ⬇️ PASANG ROUTER YANG DIPAKAI WEB
+app.use("/api/auth", authRouter);
 
-// Sesuaikan daftar ini dengan file di src/routes/**
-(async () => {
-  await mountOptional("./routes/auth", "/api/auth");
-  await mountOptional("./routes/password", "/api/password");
-  await mountOptional("./routes/audit", "/api/audit");
-  await mountOptional("./routes/balls", "/api/balls");
-  await mountOptional("./routes/sort", "/api/sort");
-  await mountOptional("./routes/products", "/api/products");
-  await mountOptional("./routes/procurements", "/api/procurements");
-  await mountOptional("./routes/product_media", "/api/product_media");
-  await mountOptional("./routes/transactions", "/api/transactions");
-  await mountOptional("./routes/channels", "/api/channels");
-  await mountOptional("./routes/reports", "/api/reports");
-  await mountOptional("./routes/stores", "/api/stores");
-  await mountOptional("./routes/report_with_store", "/api/report-with-store");
-  await mountOptional("./routes/upload", "/api/upload");
-  await mountOptional("./routes/users", "/api/users");
-})();
+// --- (opsional) Tambahkan lain kalau memang ada file-nya ---
+// import usersRouter from "./routes/users";
+// app.use("/api/users", usersRouter);
+// import productsRouter from "./routes/products";
+// app.use("/api/products", productsRouter);
+// ... dst
 
 export default app;
