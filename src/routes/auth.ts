@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt, { type Secret } from "jsonwebtoken";
 import prisma from "../utils/prisma";
@@ -7,18 +7,19 @@ function secondsUntilNextJakartaMidnight(): number {
   const nowSec = Math.floor(Date.now() / 1000);
   const offset = 7 * 3600;
   const localDayStart = Math.floor((nowSec + offset) / 86400) * 86400 - offset;
-  const nextMidnight = localDayStart + 86400;
-  const delta = Math.max(60, nextMidnight - nowSec);
-  return delta;
+  return Math.max(60, localDayStart + 86400 - nowSec);
 }
 
 const r = Router();
 const secret = (process.env.JWT_SECRET || "devsecret") as Secret;
 
-r.post("/login", async (req, res) => {
+r.post("/login", async (req: Request, res: Response) => {
   try {
     const { username, email, identifier, password } = (req.body || {}) as {
-      username?: string; email?: string; identifier?: string; password?: string;
+      username?: string;
+      email?: string;
+      identifier?: string;
+      password?: string;
     };
     const loginId = (username ?? email ?? identifier ?? "").trim();
     if (!loginId || !password) {
