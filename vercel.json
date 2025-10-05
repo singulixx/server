@@ -1,8 +1,0 @@
-{
-  "functions": {
-    "functions": {
-      "api/**": { "runtime": "nodejs20.x", "maxDuration": 60, "memory": 1024 }
-    }
-  },
-  "crons": [{ "path": "/api/cron/run", "schedule": "0 0 * * *" }]
-}
