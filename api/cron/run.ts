@@ -1,11 +1,23 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+export const config = {
+  runtime: "nodejs20.x",
+  maxDuration: 60,
+  memory: 1024,
+};
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers['x-cron-secret'] !== secret) {
+  const given =
+    req?.headers?.["x-cron-secret"] ??
+    (req?.query ? (req.query as any).secret : undefined);
+
+  if (secret && given !== secret) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  // TODO: put your real job logic here
-  // Example: await someService.runJobs();
-  res.json({ ok: true });
+
+  // TODO: letakkan pekerjaan terjadwal kamu di sini
+  // contoh:
+  // await syncAllChannels();
+  // await generateDailyReport();
+
+  return res.json({ ok: true });
 }
