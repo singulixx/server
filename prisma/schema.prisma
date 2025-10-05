@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Optionally set a shadow DB for migrations:
+  // shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  resetPasswordTokenHash String?
+  resetPasswordExpiresAt DateTime?
+  resetPasswordUsed Boolean @default(false)
+  id        Int           @id @default(autoincrement())
+  name      String
+  username  String        @unique
+  password  String
+  role      Role          @default(STAFF)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  logs      AuditLog[]
+  sorts     SortSession[]
+  procurements Procurement[]
+}
+
+enum Role {
+  OWNER
+  STAFF
+}
+
+
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String
+  contact   String?
+  createdAt DateTime @default(now())
+  // ❌ relasi ke Ball dihapus
+}
+
+model Ball {
+  id        Int           @id @default(autoincrement())
+  code      String        @unique
+  origin    String
+  category  String
+  supplier  String // sekarang varchar
+  weightKg  Float
+  buyPrice  Int
+  status    BallStatus    @default(UNOPENED)
+  totalPcsOpened Int @default(0)
+  docUrl    String?
+  createdBy Int?
+  updatedBy Int?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  products  Product[]
+  sorts     SortSession[]
+@@index([createdAt])
+@@index([status])
+
+}
+
+enum BallStatus {
+  UNOPENED
+  OPENED
+  SORTED
+}
+
+model Product {
+  id           Int           @id @default(autoincrement())
+  name         String
+  category     String
+  grade        String
+  pricePcs     Int?
+  priceBulk    Int?
+  priceKg      Int?
+  stock        Int           @default(0)
+  imageUrl     String?
+  isDeleted    Boolean       @default(false)
+  ballId       Int?
+  ball         Ball?         @relation(fields: [ballId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  media        ProductMedia[]
+  transactions Transaction[]
+  lastBuyPrice  Int?
+  lastPurchaseType PurchaseType?
+  procurementItems ProcurementItem[]
+  priceBundle  Int?
+  priceKilo    Int?
+@@index([createdAt])
+@@index([isDeleted, createdAt])
+@@index([ballId])
+
+}
+
+
+model SortSession {
+  id        Int      @id @default(autoincrement())
+  ballId    Int
+  gradeA    Int      @default(0)
+  gradeB    Int      @default(0)
+  reject    Int      @default(0)
+  userId    Int?
+  createdAt DateTime @default(now())
+  ball      Ball     @relation(fields: [ballId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model ChannelAccount {
+  id           Int           @id @default(autoincrement())
+  platform     Platform
+  label        String
+  credentials  Json?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+}
+
+enum Platform {
+  SHOPEE
+  TIKTOK
+  OFFLINE
+}
+
+model Transaction {
+  id              Int       @id @default(autoincrement())
+  productId       Int
+  channelAccountId Int
+  qty             Int
+  unitPrice       Float
+  totalPrice      Float
+  occurredAt      DateTime
+  status          String
+  priceType       String
+  storeId         Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?   // 👈 tambahkan ini
+  product         Product    @relation(fields: [productId], references: [id])
+  channel         ChannelAccount @relation(fields: [channelAccountId], references: [id])
+  store           Store?     @relation(fields: [storeId], references: [id])
+@@index([occurredAt, storeId])
+@@index([channelAccountId])
+@@index([productId])
+
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String
+  entity    String
+  entityId  Int?
+  meta      Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model SyncLog {
+  id        Int      @id @default(autoincrement())
+  platform  Platform
+  accountId Int?
+  type      String // push|import|stock
+  status    String // success|failed
+  message   String?
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+
+model Store {
+  id        Int           @id @default(autoincrement())
+  name      String
+  type      String 
+  channel   String? 
+  apiKey    String?
+  partnerId String?
+  secretKey String? 
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  transactions Transaction[]
+@@index([createdAt])
+
+}
+
+
+enum MediaKind {
+  IMAGE
+  DOCUMENT
+}
+
+model ProductMedia {
+  id         Int        @id @default(autoincrement())
+  product    Product    @relation(fields: [productId], references: [id])
+  productId  Int
+  url        String
+  kind       MediaKind  @default(IMAGE)
+  createdAt  DateTime   @default(now())
+@@index([productId])
+
+}
+
+
+enum PurchaseType {
+  UNIT
+  BULK
+  KG
+}
+
+
+model Procurement {
+  id           Int           @id @default(autoincrement())
+  supplier     String?
+  purchaseType PurchaseType
+  occurredAt   DateTime
+  note         String?
+  docUrl       String?
+  createdBy    Int?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  items        ProcurementItem[]
+  user         User?         @relation(fields: [createdBy], references: [id])
+}
+
+model ProcurementItem {
+  id            Int          @id @default(autoincrement())
+  procurementId Int
+  productId     Int
+  qtyOrKg       Int
+  buyPrice      Int
+  subtotal      Int
+  procurement   Procurement  @relation(fields: [procurementId], references: [id])
+  product       Product      @relation(fields: [productId], references: [id])
+}

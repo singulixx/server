@@ -1,0 +1,23 @@
+# Node / Next / Build
+node_modules/
+.npm/
+.pnpm-store/
+.next/
+out/
+dist/
+build/
+.vercel/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Logs & misc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+.DS_Store
+coverage/
