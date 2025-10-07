@@ -1,4 +1,4 @@
-import app from "../src/app";
+import app from "../src/app.js";
 
 export const config = { runtime: "nodejs", maxDuration: 60, memory: 1024 };
 

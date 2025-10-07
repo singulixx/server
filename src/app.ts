@@ -6,8 +6,7 @@ import express, {
 } from "express";
 import cors from "cors";
 // import helmet safely for both ESM/CJS
-import * as helmetNS from "helmet";
-const helmetFactory = (helmetNS as any).default ?? helmetNS;
+import helmet from "helmet";
 import compression from "compression";
 
 // Routes
@@ -53,7 +52,7 @@ app.use(
 app.options("*", cors());
 
 // Security + compression
-app.use(helmetFactory());
+app.use(helmet());
 app.use(compression());
 app.use(express.json({ limit: "4mb" }));
 
