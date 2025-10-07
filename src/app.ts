@@ -25,16 +25,17 @@ const allowlist = (
 
 app.use(
   cors({
-    origin(origin, cb) {
-      // Allow SSR/curl requests
-      if (!origin) return cb(null, true);
+    origin(origin, callback) {
+      // Allow SSR / server-side requests (tanpa origin)
+      if (!origin) return callback(null, true);
 
       if (allowlist.includes(origin)) {
-        return cb(null, true);
+        // ✅ Kembalikan origin yg spesifik, bukan "true"
+        return callback(null, origin);
       }
 
       console.warn("❌ Blocked by CORS:", origin);
-      return cb(new Error(`Not allowed by CORS: ${origin}`));
+      return callback(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
