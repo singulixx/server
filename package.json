@@ -39,7 +39,10 @@
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "tsx": "^4.16.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
@@ -48,9 +51,6 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.19.17",
     "eslint": "^9.9.0",
-    "prisma": "^5.22.0",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.16.2",
-    "typescript": "^5.5.4"
+    "prisma": "^5.22.0"
   }
 }
