@@ -5,7 +5,9 @@ import express, {
   type NextFunction,
 } from "express";
 import cors from "cors";
-import helmet from "helmet";
+// import helmet with a safe callable fallback to support CJS/ESM bundles on Vercel
+import * as helmetNS from "helmet";
+const helmetFactory = (helmetNS as any).default ?? helmetNS;
 import compression from "compression";
 
 // static import router yang dipakai
@@ -40,7 +42,8 @@ app.use(
 );
 app.options("*", cors());
 
-app.use(helmet());
+// use the safe helmet factory
+app.use(helmetFactory());
 app.use(compression());
 app.use(express.json({ limit: "4mb" }));
 
