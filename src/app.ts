@@ -5,18 +5,21 @@ import express, {
   type NextFunction,
 } from "express";
 import cors from "cors";
-// import helmet with a safe callable fallback to support CJS/ESM bundles on Vercel
+// import helmet safely for both ESM/CJS
 import * as helmetNS from "helmet";
 const helmetFactory = (helmetNS as any).default ?? helmetNS;
 import compression from "compression";
 
-// static import router yang dipakai
+// Routes
 import authRouter from "./routes/auth.js";
 
 const app = express();
 
-/** CORS allowlist (comma-separated) */
-const allowlist = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
+/** ✅ CORS allowlist */
+const allowlist = (
+  process.env.CORS_ORIGIN ??
+  "https://web-mocha-eight-45.vercel.app,http://localhost:5432"
+)
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -24,9 +27,14 @@ const allowlist = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
 app.use(
   cors({
     origin(origin, cb) {
+      // Allow SSR/curl requests
       if (!origin) return cb(null, true);
-      if (allowlist.length === 0 || allowlist.includes(origin))
+
+      if (allowlist.includes(origin)) {
         return cb(null, true);
+      }
+
+      console.warn("❌ Blocked by CORS:", origin);
       return cb(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
@@ -40,22 +48,24 @@ app.use(
     exposedHeaders: ["Content-Disposition"],
   })
 );
+
+// handle preflight globally
 app.options("*", cors());
 
-// use the safe helmet factory
+// Security + compression
 app.use(helmetFactory());
 app.use(compression());
 app.use(express.json({ limit: "4mb" }));
 
-// Health
+// Health route
 app.get("/api/health", (_req: Request, res: Response) =>
   res.json({ ok: true })
 );
 
-// Routes
+// Register auth router
 app.use("/api/auth", authRouter);
 
-// Error handler global (TYPED)
+// Global error handler
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error("UNCAUGHT_ERROR:", err);
   const msg =

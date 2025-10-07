@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt, { type Secret } from "jsonwebtoken";
 import prisma from "../utils/prisma.js";
 
-function secondsUntilNextJakartaMidnight(): number {
+function secondsUntilNextJakartaMidnight() {
   const nowSec = Math.floor(Date.now() / 1000);
   const offset = 7 * 3600;
   const localDayStart = Math.floor((nowSec + offset) / 86400) * 86400 - offset;
@@ -13,6 +13,14 @@ function secondsUntilNextJakartaMidnight(): number {
 const r = Router();
 const secret = (process.env.JWT_SECRET || "devsecret") as Secret;
 
+// ✅ CORS header fallback (optional, redundant with global middleware)
+r.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "https://web-mocha-eight-45.vercel.app");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  next();
+});
+
 r.post("/login", async (req: Request, res: Response) => {
   try {
     const { username, email, identifier, password } = (req.body || {}) as {
@@ -21,6 +29,7 @@ r.post("/login", async (req: Request, res: Response) => {
       identifier?: string;
       password?: string;
     };
+
     const loginId = (username ?? email ?? identifier ?? "").trim();
     if (!loginId || !password) {
       return res.status(400).json({ error: "Username & password required" });
