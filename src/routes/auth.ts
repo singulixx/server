@@ -1,9 +1,9 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import jwt, { type Secret } from "jsonwebtoken";
 import prisma from "../utils/prisma.js";
 
-function secondsUntilNextJakartaMidnight() {
+function secondsUntilNextJakartaMidnight(): number {
   const nowSec = Math.floor(Date.now() / 1000);
   const offset = 7 * 3600;
   const localDayStart = Math.floor((nowSec + offset) / 86400) * 86400 - offset;
@@ -13,15 +13,11 @@ function secondsUntilNextJakartaMidnight() {
 const r = Router();
 const secret = (process.env.JWT_SECRET || "devsecret") as Secret;
 
-// ✅ CORS header fallback (optional, redundant with global middleware)
-r.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "https://web-mocha-eight-45.vercel.app");
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  next();
-});
-
-r.post("/login", async (req: Request, res: Response) => {
+/**
+ * ✅ POST /api/auth/login
+ * Login user via username/email/identifier + password
+ */
+r.post("/login", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { username, email, identifier, password } = (req.body || {}) as {
       username?: string;
@@ -57,8 +53,8 @@ r.post("/login", async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    console.error("Login error:", err);
+    next(err);
   }
 });
 

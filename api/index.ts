@@ -1,17 +1,15 @@
 import app from "../src/app.js";
-import { createServer } from "http";
 
 export const config = {
   api: {
-    bodyParser: false, // penting untuk Express
+    bodyParser: false, // Express handles this
   },
   runtime: "nodejs",
   maxDuration: 60,
   memory: 1024,
 };
 
-// ✅ Adapter agar Vercel bisa menjalankan Express langsung
+// ✅ Wrap express app in Vercel-compatible handler
 export default function handler(req: any, res: any) {
-  const server = createServer(app);
-  server.emit("request", req, res);
+  return app(req, res);
 }

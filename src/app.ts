@@ -1,9 +1,6 @@
 import "dotenv/config";
-import express, {
-  type Request,
-  type Response,
-  type NextFunction,
-} from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
+import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 
@@ -12,7 +9,7 @@ import authRouter from "./routes/auth.js";
 
 const app = express();
 
-/** ✅ CORS Allowlist */
+/** ✅ Setup CORS allowlist */
 const allowlist = (
   process.env.CORS_ORIGIN ??
   "https://web-mocha-eight-45.vercel.app,http://localhost:3000"
@@ -21,32 +18,23 @@ const allowlist = (
   .map((s) => s.trim())
   .filter(Boolean);
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const allowed = origin && allowlist.includes(origin);
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true); // Allow SSR / curl
+      if (allowlist.includes(origin)) return cb(null, true);
+      console.warn("❌ Blocked by CORS:", origin);
+      cb(new Error(`Not allowed by CORS: ${origin}`));
+    },
+    credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type", "Accept", "X-Requested-With"],
+    exposedHeaders: ["Content-Disposition"],
+  })
+);
 
-  // ❗ gunakan hanya satu nilai origin, jangan gabungan
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    allowed ? origin! : allowlist[0]
-  );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Authorization,Content-Type,Accept,X-Requested-With"
-  );
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-
-  if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
-  }
-
-  next();
-});
+// Handle preflight requests
+app.options("*", cors());
 
 // Security + compression
 app.use(helmet());
@@ -58,7 +46,7 @@ app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// Auth routes
+// Register routes
 app.use("/api/auth", authRouter);
 
 // Global error handler
