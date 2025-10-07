@@ -1,13 +1,15 @@
-// Gunakan hasil build dari /dist, bukan /src
-import app from "../dist/app.js";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import express from "express";
+import cors from "cors";
 
-export const config = {
-  runtime: "nodejs",
-  maxDuration: 60,
-  memory: 1024,
-};
+// import router kamu
+import app from "../src/app";
 
-// Vercel akan menjalankan fungsi ini untuk setiap request
-export default function handler(req: any, res: any) {
-  return (app as any)(req, res);
+const server = express();
+server.use(cors());
+server.use(express.json());
+server.use("/api", app);
+
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  return server(req as any, res as any);
 }
