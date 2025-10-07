@@ -4,8 +4,6 @@ import express, {
   type Response,
   type NextFunction,
 } from "express";
-import cors from "cors";
-// import helmet safely for both ESM/CJS
 import helmet from "helmet";
 import compression from "compression";
 
@@ -14,7 +12,7 @@ import authRouter from "./routes/auth.js";
 
 const app = express();
 
-/** ✅ CORS allowlist */
+/** ✅ CORS Allowlist (multi-origin support) */
 const allowlist = (
   process.env.CORS_ORIGIN ??
   "https://web-mocha-eight-45.vercel.app,http://localhost:5432"
@@ -23,34 +21,35 @@ const allowlist = (
   .map((s) => s.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      // Allow SSR / server-side requests (tanpa origin)
-      if (!origin) return callback(null, true);
+/** ✅ Manual CORS middleware (tanpa library cors) */
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
 
-      if (allowlist.includes(origin)) {
-        // ✅ Kembalikan origin yg spesifik, bukan "true"
-        return callback(null, origin);
-      }
+  if (origin && allowlist.includes(origin)) {
+    // jika origin terdaftar di allowlist
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    // fallback: gunakan origin pertama di daftar
+    res.setHeader("Access-Control-Allow-Origin", allowlist[0]);
+  }
 
-      console.warn("❌ Blocked by CORS:", origin);
-      return callback(new Error(`Not allowed by CORS: ${origin}`));
-    },
-    credentials: true,
-    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Authorization",
-      "Content-Type",
-      "Accept",
-      "X-Requested-With",
-    ],
-    exposedHeaders: ["Content-Disposition"],
-  })
-);
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Authorization,Content-Type,Accept,X-Requested-With"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
 
-// handle preflight globally
-app.options("*", cors());
+  // tangani preflight OPTIONS request
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
 
 // Security + compression
 app.use(helmet());
@@ -62,7 +61,7 @@ app.get("/api/health", (_req: Request, res: Response) =>
   res.json({ ok: true })
 );
 
-// Register auth router
+// Register routes
 app.use("/api/auth", authRouter);
 
 // Global error handler
