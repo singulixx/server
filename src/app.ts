@@ -9,7 +9,7 @@ import helmet from "helmet";
 import compression from "compression";
 
 // static import router yang dipakai
-import authRouter from "./routes/auth";
+import authRouter from "./routes/auth.js";
 
 const app = express();
 

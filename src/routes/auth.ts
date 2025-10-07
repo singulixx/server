@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt, { type Secret } from "jsonwebtoken";
-import prisma from "../utils/prisma";
+import prisma from "../utils/prisma.js";
 
 function secondsUntilNextJakartaMidnight(): number {
   const nowSec = Math.floor(Date.now() / 1000);

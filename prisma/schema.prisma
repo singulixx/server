@@ -12,24 +12,28 @@ datasource db {
 model User {
   resetPasswordTokenHash String?
   resetPasswordExpiresAt DateTime?
-  resetPasswordUsed Boolean @default(false)
-  id        Int           @id @default(autoincrement())
+  resetPasswordUsed      Boolean   @default(false)
+
+  id        Int      @id @default(autoincrement())
   name      String
-  username  String        @unique
+  username  String   @unique
   password  String
-  role      Role          @default(STAFF)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  logs      AuditLog[]
-  sorts     SortSession[]
+  role      Role     @default(STAFF)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logs         AuditLog[]
+  sorts        SortSession[]
   procurements Procurement[]
+
+  /// Recovery codes relation (added so Prisma relation is bi-directional)
+  recoveryCodes RecoveryCode[]
 }
 
 enum Role {
   OWNER
   STAFF
 }
-
 
 model Supplier {
   id        Int      @id @default(autoincrement())
@@ -40,25 +44,25 @@ model Supplier {
 }
 
 model Ball {
-  id        Int           @id @default(autoincrement())
-  code      String        @unique
-  origin    String
-  category  String
-  supplier  String // sekarang varchar
-  weightKg  Float
-  buyPrice  Int
-  status    BallStatus    @default(UNOPENED)
-  totalPcsOpened Int @default(0)
-  docUrl    String?
-  createdBy Int?
-  updatedBy Int?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  products  Product[]
-  sorts     SortSession[]
-@@index([createdAt])
-@@index([status])
+  id             Int           @id @default(autoincrement())
+  code           String        @unique
+  origin         String
+  category       String
+  supplier       String // sekarang varchar
+  weightKg       Float
+  buyPrice       Int
+  status         BallStatus    @default(UNOPENED)
+  totalPcsOpened Int           @default(0)
+  docUrl         String?
+  createdBy      Int?
+  updatedBy      Int?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  products       Product[]
+  sorts          SortSession[]
 
+  @@index([createdAt])
+  @@index([status])
 }
 
 enum BallStatus {
@@ -68,33 +72,32 @@ enum BallStatus {
 }
 
 model Product {
-  id           Int           @id @default(autoincrement())
-  name         String
-  category     String
-  grade        String
-  pricePcs     Int?
-  priceBulk    Int?
-  priceKg      Int?
-  stock        Int           @default(0)
-  imageUrl     String?
-  isDeleted    Boolean       @default(false)
-  ballId       Int?
-  ball         Ball?         @relation(fields: [ballId], references: [id])
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  media        ProductMedia[]
-  transactions Transaction[]
-  lastBuyPrice  Int?
+  id               Int               @id @default(autoincrement())
+  name             String
+  category         String
+  grade            String
+  pricePcs         Int?
+  priceBulk        Int?
+  priceKg          Int?
+  stock            Int               @default(0)
+  imageUrl         String?
+  isDeleted        Boolean           @default(false)
+  ballId           Int?
+  ball             Ball?             @relation(fields: [ballId], references: [id])
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  media            ProductMedia[]
+  transactions     Transaction[]
+  lastBuyPrice     Int?
   lastPurchaseType PurchaseType?
   procurementItems ProcurementItem[]
-  priceBundle  Int?
-  priceKilo    Int?
-@@index([createdAt])
-@@index([isDeleted, createdAt])
-@@index([ballId])
+  priceBundle      Int?
+  priceKilo        Int?
 
+  @@index([createdAt])
+  @@index([isDeleted, createdAt])
+  @@index([ballId])
 }
-
 
 model SortSession {
   id        Int      @id @default(autoincrement())
@@ -125,26 +128,26 @@ enum Platform {
 }
 
 model Transaction {
-  id              Int       @id @default(autoincrement())
-  productId       Int
+  id               Int            @id @default(autoincrement())
+  productId        Int
   channelAccountId Int
-  qty             Int
-  unitPrice       Float
-  totalPrice      Float
-  occurredAt      DateTime
-  status          String
-  priceType       String
-  storeId         Int?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?   // 👈 tambahkan ini
-  product         Product    @relation(fields: [productId], references: [id])
-  channel         ChannelAccount @relation(fields: [channelAccountId], references: [id])
-  store           Store?     @relation(fields: [storeId], references: [id])
-@@index([occurredAt, storeId])
-@@index([channelAccountId])
-@@index([productId])
+  qty              Int
+  unitPrice        Float
+  totalPrice       Float
+  occurredAt       DateTime
+  status           String
+  priceType        String
+  storeId          Int?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+  product          Product        @relation(fields: [productId], references: [id])
+  channel          ChannelAccount @relation(fields: [channelAccountId], references: [id])
+  store            Store?         @relation(fields: [storeId], references: [id])
 
+  @@index([occurredAt, storeId])
+  @@index([channelAccountId])
+  @@index([productId])
 }
 
 model AuditLog {
@@ -169,23 +172,21 @@ model SyncLog {
   createdAt DateTime @default(now())
 }
 
-
 model Store {
-  id        Int           @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
-  type      String 
-  channel   String? 
+  type      String
+  channel   String?
   apiKey    String?
   partnerId String?
-  secretKey String? 
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  secretKey String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   transactions Transaction[]
-@@index([createdAt])
 
+  @@index([createdAt])
 }
-
 
 enum MediaKind {
   IMAGE
@@ -193,16 +194,15 @@ enum MediaKind {
 }
 
 model ProductMedia {
-  id         Int        @id @default(autoincrement())
-  product    Product    @relation(fields: [productId], references: [id])
-  productId  Int
-  url        String
-  kind       MediaKind  @default(IMAGE)
-  createdAt  DateTime   @default(now())
-@@index([productId])
+  id        Int       @id @default(autoincrement())
+  product   Product   @relation(fields: [productId], references: [id])
+  productId Int
+  url       String
+  kind      MediaKind @default(IMAGE)
+  createdAt DateTime  @default(now())
 
+  @@index([productId])
 }
-
 
 enum PurchaseType {
   UNIT
@@ -210,29 +210,40 @@ enum PurchaseType {
   KG
 }
 
-
 model Procurement {
-  id           Int           @id @default(autoincrement())
+  id           Int               @id @default(autoincrement())
   supplier     String?
   purchaseType PurchaseType
   occurredAt   DateTime
   note         String?
   docUrl       String?
   createdBy    Int?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
   deletedAt    DateTime?
   items        ProcurementItem[]
-  user         User?         @relation(fields: [createdBy], references: [id])
+  user         User?             @relation(fields: [createdBy], references: [id])
 }
 
 model ProcurementItem {
-  id            Int          @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   procurementId Int
   productId     Int
   qtyOrKg       Int
   buyPrice      Int
   subtotal      Int
-  procurement   Procurement  @relation(fields: [procurementId], references: [id])
-  product       Product      @relation(fields: [productId], references: [id])
+  procurement   Procurement @relation(fields: [procurementId], references: [id])
+  product       Product     @relation(fields: [productId], references: [id])
+}
+
+model RecoveryCode {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }

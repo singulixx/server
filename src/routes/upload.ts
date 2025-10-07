@@ -1,6 +1,6 @@
 import { Router } from "express";
 // @ts-ignore - optional auth middleware in your codebase
-// import { authRequired } from "../utils/auth";
+// import { authRequired } from "../utils/auth.js";
 import { put } from "@vercel/blob";
 import multer from "multer";
 

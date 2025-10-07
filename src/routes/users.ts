@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import prisma from "../utils/prisma";
-import { authRequired, requireRole } from "../utils/auth";
+import prisma from "../utils/prisma.js";
+import { authRequired, requireRole } from "../utils/auth.js";
 
 const r = Router();
 r.use(authRequired, requireRole("OWNER"));

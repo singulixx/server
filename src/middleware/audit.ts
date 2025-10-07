@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { logAudit } from "../utils/audit";
+import { logAudit } from "../utils/audit.js";
 
 const SENSITIVE_PATHS = [/\/auth\/login/i, /\/auth\/reset/i, /\/auth\/forgot/i, /\/account\/password/i];
 const shouldRedact = (path: string) => SENSITIVE_PATHS.some((re) => re.test(path));

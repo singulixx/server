@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { prisma } from "../db";
-import { authRequired } from "../utils/auth";
-import { setCacheHeaders } from "../utils/cache"; // <-- pastikan ini ada
+import { prisma } from "../db.js";
+import { authRequired } from "../utils/auth.js";
+import { setCacheHeaders } from "../utils/cache.js"; // <-- pastikan ini ada
 
 const router = Router();
 router.use(authRequired);

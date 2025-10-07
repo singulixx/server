@@ -1,8 +1,8 @@
 import { Router } from "express";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import prisma from "../utils/prisma";
-import { logAudit } from "../utils/audit";
+import prisma from "../utils/prisma.js";
+import { logAudit } from "../utils/audit.js";
 
 const r = Router();
 

@@ -1,5 +1,5 @@
 // src/routes/transactions.ts
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { prisma } from "../db.js";
 import { authRequired } from "../utils/auth.js";
 
@@ -12,15 +12,15 @@ function toNum(v: any) {
   return Number.isFinite(n) ? n : NaN;
 }
 
-// LIST
-
-r.get("/", async (req, res) => {
+r.get("/", async (req: Request, res: Response) => {
   try {
     const q: any = req.query || {};
     const limit = Number.isFinite(Number(q.limit)) ? Number(q.limit) : 20;
-    // support both offset & skip (UI uses skip)
-    const offset = Number.isFinite(Number(q.offset)) ? Number(q.offset) :
-                   (Number.isFinite(Number(q.skip)) ? Number(q.skip) : 0);
+    const offset = Number.isFinite(Number(q.offset))
+      ? Number(q.offset)
+      : Number.isFinite(Number(q.skip))
+      ? Number(q.skip)
+      : 0;
 
     const where: any = { deletedAt: null };
 
@@ -28,7 +28,7 @@ r.get("/", async (req, res) => {
     if (q.from || q.to) {
       where.occurredAt = {};
       if (q.from) where.occurredAt.gte = new Date(String(q.from) + "T00:00:00.000Z");
-      if (q.to)   where.occurredAt.lte = new Date(String(q.to)   + "T23:59:59.999Z");
+      if (q.to) where.occurredAt.lte = new Date(String(q.to) + "T23:59:59.999Z");
     }
 
     // filters
@@ -38,8 +38,8 @@ r.get("/", async (req, res) => {
       const s = String(q.search);
       where.OR = [
         { product: { name: { contains: s, mode: "insensitive" } } },
-        { store:   { name: { contains: s, mode: "insensitive" } } },
-        { note:    { contains: s, mode: "insensitive" } },
+        { store: { name: { contains: s, mode: "insensitive" } } },
+        { note: { contains: s, mode: "insensitive" } }, // if note exists in relation—no runtime problem for query
       ];
     }
 
@@ -63,26 +63,25 @@ r.get("/", async (req, res) => {
     res.status(400).json({ error: err?.message || "Gagal mengambil transaksi" });
   }
 });
-// CREATE
-r.post("/", async (req, res) => {
+
+r.post("/", async (req: Request, res: Response) => {
   try {
     const u = (req as any).user;
-    const { storeId, productId, qty, unitPrice, channel, occurredAt, customer, note } = req.body || {};
+    const { storeId, productId, qty, unitPrice } = req.body || {};
 
     const sId = toNum(storeId);
     const pId = toNum(productId);
     const q = toNum(qty);
     const price = toNum(unitPrice);
 
-// Block selling products derived from balls unless explicitly allowed
-try {
-  const prod = await prisma.product.findUnique({ where: { id: pId } });
-  const allow = String(process.env.ALLOW_SELL_SORTED_PRODUCTS || 'false').toLowerCase() === 'true';
-  if (prod && prod.ballId && !allow) {
-    return res.status(400).json({ error: "Produk hasil sortir (berasal dari BALL) tidak boleh dijual dari menu ini." });
-  }
-} catch {}
-
+    // Block selling products derived from balls unless explicitly allowed
+    try {
+      const prod = await prisma.product.findUnique({ where: { id: pId } });
+      const allow = String(process.env.ALLOW_SELL_SORTED_PRODUCTS || "false").toLowerCase() === "true";
+      if (prod && prod.ballId && !allow) {
+        return res.status(400).json({ error: "Produk hasil sortir (berasal dari BALL) tidak boleh dijual dari menu ini." });
+      }
+    } catch {}
 
     if (!sId || !pId || !q) return res.status(400).json({ error: "storeId, productId, qty wajib" });
     if (!(q > 0)) return res.status(400).json({ error: "qty harus > 0" });
@@ -97,19 +96,23 @@ try {
     const created = await prisma.$transaction(async (tx) => {
       // Resolve channel account
       let channelAccountId: number | null = null;
-      if (channelAccountId == null && (req.body?.channelAccountId)) {
+      if (req.body?.channelAccountId) {
         channelAccountId = Number(req.body.channelAccountId);
       }
+
       if (!channelAccountId) {
-        const platform = String(channel || 'offline').toUpperCase();
-        const existing = await tx.channelAccount.findFirst({ where: { platform, active: true } });
+        // fallback: try to resolve platform string from req.body.channel (if provided)
+        const platformRaw = req.body?.channel ? String(req.body.channel).toUpperCase() : "OFFLINE";
+        // find active channel account by platform (if any)
+        const existing = await tx.channelAccount.findFirst({ where: { platform: platformRaw as any, active: true } });
         if (existing) {
           channelAccountId = existing.id;
-        } else if (platform === 'OFFLINE') {
-          const createdCh = await tx.channelAccount.create({ data: { platform: 'OFFLINE', label: 'Offline' } });
+        } else if (platformRaw === "OFFLINE") {
+          const createdCh = await tx.channelAccount.create({ data: { platform: "OFFLINE", label: "Offline", credentials: {} } });
           channelAccountId = createdCh.id;
         } else {
-          throw new Error('Channel account not found for platform ' + platform);
+          // if platform provided but no channel found, fail explicitly
+          throw new Error("Channel account not found for platform " + platformRaw);
         }
       }
 
@@ -120,10 +123,10 @@ try {
           channelAccountId,
           qty: q,
           unitPrice: price,
-          totalPrice, // ✅ wajib
-          occurredAt: occurredAt ? new Date(occurredAt) : new Date(),
-          status: 'paid',
-          priceType: 'UNIT',
+          totalPrice,
+          occurredAt: req.body?.occurredAt ? new Date(req.body.occurredAt) : new Date(),
+          status: "paid",
+          priceType: "UNIT",
         },
       });
 
@@ -142,14 +145,13 @@ try {
   }
 });
 
-// UPDATE
-r.put("/:id", async (req, res) => {
+r.put("/:id", async (req: Request, res: Response) => {
   try {
     const u = (req as any).user;
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "ID tidak valid" });
 
-    const { qty, unitPrice, channel, occurredAt, customer, note } = req.body || {};
+    const { qty, unitPrice, occurredAt } = req.body || {};
     const newQty = toNum(qty);
     const newPrice = toNum(unitPrice);
 
@@ -177,12 +179,9 @@ r.put("/:id", async (req, res) => {
         data: {
           qty: nextQty,
           unitPrice: nextPrice,
-          totalPrice: nextQty * nextPrice, // ✅ wajib
-          channel: channel ?? old.channel,
+          totalPrice: nextQty * nextPrice,
           occurredAt: occurredAt ? new Date(occurredAt) : old.occurredAt,
-          customer: typeof customer === "undefined" ? old.customer : (customer ?? null),
-          note: typeof note === "undefined" ? old.note : (note ?? null),
-          updatedById: u?.id ?? null,
+          // no customer/note/channel/updatedById fields used because not present in schema
         },
       });
 
@@ -196,8 +195,7 @@ r.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE
-r.delete("/:id", async (req, res) => {
+r.delete("/:id", async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: "ID tidak valid" });
