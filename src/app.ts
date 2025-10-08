@@ -1,12 +1,15 @@
 import "dotenv/config";
-import express, { type Request, type Response, type NextFunction } from "express";
+import express, {
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import cors from "cors";
-import helmet from "helmet";
+import helmetPkg from "helmet";
+import authRouter from "./routes/auth.js";
 import compression from "compression";
 
-// Routes
-import authRouter from "./routes/auth.js";
-
+const helmet = (helmetPkg as any).default ?? helmetPkg;
 const app = express();
 
 /** ✅ Setup CORS allowlist */
@@ -28,7 +31,12 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Authorization", "Content-Type", "Accept", "X-Requested-With"],
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+      "Accept",
+      "X-Requested-With",
+    ],
     exposedHeaders: ["Content-Disposition"],
   })
 );
