@@ -1,3 +1,4 @@
+// api/index.ts
 export const config = {
   api: {
     bodyParser: false,
@@ -12,23 +13,31 @@ let cachedApp: any | null = null;
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  // ✅ 1) Try compiled entry (Vercel runtime)
+  // 1) Try runtime source (dev)
   try {
-    // @ts-ignore: only exists after build
-    const mod = await import("../dist/index.js");
-    cachedApp = mod.default ?? mod;
-    return cachedApp;
+    const mod = await import('../src/' + 'app.js'); // concatenation avoids TS static resolution
+    cachedApp = mod && mod.default ? mod.default : mod;
+    if (cachedApp) return cachedApp;
   } catch (err) {
-    console.warn("⚠️ Cannot load ../dist/index.js:", err);
+    // ignore
   }
 
-  // ✅ 2) Try dev source (local dev)
+  // 2) Try compiled entry point dist/src/index.js (tsc with outDir: 'dist' and rootDir: '.')
   try {
-    const mod = await import("../src/index.js");
-    cachedApp = mod.default ?? mod;
-    return cachedApp;
+    const mod = await import('../dist/src/' + 'index.js');
+    cachedApp = mod && mod.default ? mod.default : mod;
+    if (cachedApp) return cachedApp;
   } catch (err) {
-    console.error("❌ Failed to load ../src/index.js:", err);
+    // ignore
+  }
+
+  // 3) Try compiled app module dist/src/app.js
+  try {
+    const mod = await import('../dist/src/' + 'app.js');
+    cachedApp = mod && mod.default ? mod.default : mod;
+    if (cachedApp) return cachedApp;
+  } catch (err) {
+    // ignore
   }
 
   return null;
@@ -39,14 +48,18 @@ export default async function handler(req: any, res: any) {
   if (!app) {
     res.statusCode = 500;
     res.end(
-      "Server entry not found. Checked ../dist/index.js and ../src/index.js"
+      'Server entry not found. Checked ../src/app.js, ../dist/src/index.js, ../dist/src/app.js. ' +
+      'Ensure your build produces dist/src/*.js or that src/app.js exists.'
     );
     return;
   }
 
-  if (typeof app === "function") return app(req, res);
-  if (app && typeof app.handle === "function") return app.handle(req, res);
+  // If app is a handler function (connect/vercel style)
+  if (typeof app === 'function') return app(req, res);
+
+  // If Express app instance
+  if (app && typeof app.handle === 'function') return app.handle(req, res);
 
   res.statusCode = 500;
-  res.end("Invalid app export: expected function or Express app");
+  res.end('Invalid server export: expected function or Express app');
 }
