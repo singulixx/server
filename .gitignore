@@ -4,9 +4,15 @@ node_modules/
 .pnpm-store/
 .next/
 out/
-dist/
 build/
 .vercel/
+
+# ✅ allow dist for server build
+# (ignore all but compiled js files)
+dist/*
+!dist/**/*.js
+!dist/**/*.json
+!dist/**/*.map
 
 # Env & secrets
 .env
