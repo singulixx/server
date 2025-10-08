@@ -8,6 +8,22 @@ import cors from "cors";
 import helmetPkg from "helmet";
 import compression from "compression";
 import authRouter from "./routes/auth.js";
+import accountRouter from "./routes/account.js";
+import auditRouter from "./routes/audit.js";
+import ballsRouter from "./routes/balls.js";
+import channelsRouter from "./routes/channels.js";
+import passwordRouter from "./routes/password.js";
+import procurementsRouter from "./routes/procurements.js";
+import productMediaRouter from "./routes/product_media.js";
+import productsRouter from "./routes/products.js";
+import reportWithStoreRouter from "./routes/report_with_store.js";
+import reportsRouter from "./routes/reports.js";
+import sortRouter from "./routes/sort.js";
+import storesRouter from "./routes/stores.js";
+import transactionsRouter from "./routes/transactions.js";
+import uploadRouter from "./routes/upload.js";
+import usersRouter from "./routes/users.js";
+
 
 // normalize helmet export for ESM/CJS compatibility
 const helmet = (helmetPkg as any).default ?? helmetPkg;
@@ -64,6 +80,22 @@ app.get("/api/health", (_req: Request, res: Response) => {
 
 // Register routes
 app.use("/api/auth", authRouter);
+app.use("/api/account", accountRouter);
+app.use("/api/audit", auditRouter);
+app.use("/api/balls", ballsRouter);
+app.use("/api/channels", channelsRouter);
+app.use("/api/password", passwordRouter);
+app.use("/api/procurements", procurementsRouter);
+app.use("/api/product-media", productMediaRouter);
+app.use("/api/products", productsRouter);
+app.use("/api/report-with-store", reportWithStoreRouter);
+app.use("/api/reports", reportsRouter);
+app.use("/api/sort", sortRouter);
+app.use("/api/stores", storesRouter);
+app.use("/api/transactions", transactionsRouter);
+app.use("/api/upload", uploadRouter);
+app.use("/api/users", usersRouter);
+
 
 // Global error handler
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
