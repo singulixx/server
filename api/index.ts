@@ -13,18 +13,18 @@ let cachedApp: any | null = null;
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  // 1) Try source (dev)
+  // 1) Try source (dev) - use concatenation to avoid TS static resolution
   try {
-    const mod = await import("../src/app.js");
+    const mod = await import("../src/" + "app.js");
     cachedApp = mod && mod.default ? mod.default : mod;
     if (cachedApp) return cachedApp;
   } catch (err) {
-    // ignore
+    // ignore and try compiled artifacts
   }
 
-  // 2) Try compiled entry point dist/src/index.js
+  // 2) Try compiled entry point dist/src/index.js (tsc with outDir: 'dist' + rootDir: '.')
   try {
-    const mod = await import("../dist/src/index.js");
+    const mod = await import("../dist/src/" + "index.js");
     cachedApp = mod && mod.default ? mod.default : mod;
     if (cachedApp) return cachedApp;
   } catch (err) {
@@ -33,7 +33,7 @@ async function loadApp() {
 
   // 3) Try compiled app module dist/src/app.js
   try {
-    const mod = await import("../dist/src/app.js");
+    const mod = await import("../dist/src/" + "app.js");
     cachedApp = mod && mod.default ? mod.default : mod;
     if (cachedApp) return cachedApp;
   } catch (err) {
@@ -54,6 +54,7 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  // Express or Vercel handler style
   if (typeof app === "function") return app(req, res);
   if (app && typeof app.handle === "function") return app.handle(req, res);
 
