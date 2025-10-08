@@ -6,10 +6,12 @@ import express, {
 } from "express";
 import cors from "cors";
 import helmetPkg from "helmet";
-import authRouter from "./routes/auth.js";
 import compression from "compression";
+import authRouter from "./routes/auth.js";
 
+// normalize helmet export for ESM/CJS compatibility
 const helmet = (helmetPkg as any).default ?? helmetPkg;
+
 const app = express();
 
 /** ✅ Setup CORS allowlist */
@@ -48,6 +50,12 @@ app.options("*", cors());
 app.use(helmet());
 app.use(compression());
 app.use(express.json({ limit: "4mb" }));
+
+// Root route — make / useful (redirect to health or return info)
+app.get("/", (_req: Request, res: Response) => {
+  res.redirect("/api/health");
+  // alternatively: res.json({ ok: true, message: "API running" });
+});
 
 // Health check
 app.get("/api/health", (_req: Request, res: Response) => {
