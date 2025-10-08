@@ -7,23 +7,28 @@ export const config = {
   memory: 1024,
 };
 
-// Cache the app instance so it's only initialized once per Vercel function cold start
 let cachedApp: any | null = null;
 
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  const isProd = process.env.NODE_ENV === "production";
-
+  // ✅ 1) Try compiled entry (Vercel runtime)
   try {
-    // 🟢 Saat development: import langsung dari src/
-    // 🟢 Saat production (Vercel): import dari dist/
-    const path = isProd ? "../dist/app.js" : "../src/app.ts";
-    const mod = await import(path);
+    // @ts-ignore: only exists after build
+    const mod = await import("../dist/index.js");
     cachedApp = mod.default ?? mod;
     return cachedApp;
   } catch (err) {
-    console.error("[loadApp] Failed to import app:", err);
+    console.warn("⚠️ Cannot load ../dist/index.js:", err);
+  }
+
+  // ✅ 2) Try dev source (local dev)
+  try {
+    const mod = await import("../src/index.js");
+    cachedApp = mod.default ?? mod;
+    return cachedApp;
+  } catch (err) {
+    console.error("❌ Failed to load ../src/index.js:", err);
   }
 
   return null;
@@ -31,20 +36,17 @@ async function loadApp() {
 
 export default async function handler(req: any, res: any) {
   const app = await loadApp();
-
   if (!app) {
     res.statusCode = 500;
     res.end(
-      "❌ Server entry not found.\nChecked: src/app.ts and dist/app.js\n" +
-        "Make sure your build outputs dist/app.js or that src/app.ts exists."
+      "Server entry not found. Checked ../dist/index.js and ../src/index.js"
     );
     return;
   }
 
-  // Support both express-style exports and direct handler
   if (typeof app === "function") return app(req, res);
   if (app && typeof app.handle === "function") return app.handle(req, res);
 
   res.statusCode = 500;
-  res.end("❌ Invalid server export — expected function or Express app.");
+  res.end("Invalid app export: expected function or Express app");
 }
