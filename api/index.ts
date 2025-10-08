@@ -15,30 +15,24 @@ async function loadApp() {
 
   // 1) Try runtime source (dev)
   try {
-    const mod = await import('../src/' + 'app.js'); // concatenation avoids TS static resolution
-    cachedApp = mod && mod.default ? mod.default : mod;
+    const mod = await import('../src/app.js');
+    cachedApp = mod.default ?? mod;
     if (cachedApp) return cachedApp;
-  } catch (err) {
-    // ignore
-  }
+  } catch {}
 
-  // 2) Try compiled entry point dist/src/index.js (tsc with outDir: 'dist' and rootDir: '.')
+  // 2) Try compiled entry point dist/index.js
   try {
-    const mod = await import('../dist/src/' + 'index.js');
-    cachedApp = mod && mod.default ? mod.default : mod;
+    const mod = await import('../dist/index.js');
+    cachedApp = mod.default ?? mod;
     if (cachedApp) return cachedApp;
-  } catch (err) {
-    // ignore
-  }
+  } catch {}
 
-  // 3) Try compiled app module dist/src/app.js
+  // 3) Try compiled app module dist/app.js
   try {
-    const mod = await import('../dist/src/' + 'app.js');
-    cachedApp = mod && mod.default ? mod.default : mod;
+    const mod = await import('../dist/app.js');
+    cachedApp = mod.default ?? mod;
     if (cachedApp) return cachedApp;
-  } catch (err) {
-    // ignore
-  }
+  } catch {}
 
   return null;
 }
@@ -48,16 +42,13 @@ export default async function handler(req: any, res: any) {
   if (!app) {
     res.statusCode = 500;
     res.end(
-      'Server entry not found. Checked ../src/app.js, ../dist/src/index.js, ../dist/src/app.js. ' +
-      'Ensure your build produces dist/src/*.js or that src/app.js exists.'
+      'Server entry not found. Checked ../src/app.js, ../dist/index.js, ../dist/app.js. ' +
+      'Ensure your build produces dist/*.js or that src/app.js exists.'
     );
     return;
   }
 
-  // If app is a handler function (connect/vercel style)
   if (typeof app === 'function') return app(req, res);
-
-  // If Express app instance
   if (app && typeof app.handle === 'function') return app.handle(req, res);
 
   res.statusCode = 500;
