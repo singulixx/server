@@ -13,28 +13,28 @@ let cachedApp: any | null = null;
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  // 1) Try runtime source (dev)
+  // 1️⃣ Try runtime source (dev mode)
   try {
-    const mod = await import('../src/' + 'app.js'); // concatenation avoids TS static resolution
-    cachedApp = mod && mod.default ? mod.default : mod;
+    const mod = await import("../src/app.js"); // local run (ts-node)
+    cachedApp = mod.default || mod;
     if (cachedApp) return cachedApp;
   } catch (err) {
     // ignore
   }
 
-  // 2) Try compiled entry point dist/src/index.js (tsc with outDir: 'dist' and rootDir: '.')
+  // 2️⃣ Try compiled app (most common)
   try {
-    const mod = await import('../dist/src/' + 'index.js');
-    cachedApp = mod && mod.default ? mod.default : mod;
+    const mod = await import("../dist/app.js"); // ⬅️ FIXED PATH
+    cachedApp = mod.default || mod;
     if (cachedApp) return cachedApp;
   } catch (err) {
     // ignore
   }
 
-  // 3) Try compiled app module dist/src/app.js
+  // 3️⃣ Try compiled index (alternative)
   try {
-    const mod = await import('../dist/src/' + 'app.js');
-    cachedApp = mod && mod.default ? mod.default : mod;
+    const mod = await import("../dist/index.js");
+    cachedApp = mod.default || mod;
     if (cachedApp) return cachedApp;
   } catch (err) {
     // ignore
@@ -45,21 +45,19 @@ async function loadApp() {
 
 export default async function handler(req: any, res: any) {
   const app = await loadApp();
+
   if (!app) {
     res.statusCode = 500;
     res.end(
-      'Server entry not found. Checked ../src/app.js, ../dist/src/index.js, ../dist/src/app.js. ' +
-      'Ensure your build produces dist/src/*.js or that src/app.js exists.'
+      "❌ Server entry not found. Checked ../src/app.js, ../dist/app.js, ../dist/index.js."
     );
     return;
   }
 
-  // If app is a handler function (connect/vercel style)
-  if (typeof app === 'function') return app(req, res);
-
-  // If Express app instance
-  if (app && typeof app.handle === 'function') return app.handle(req, res);
+  // Express or function handler
+  if (typeof app === "function") return app(req, res);
+  if (app && typeof app.handle === "function") return app.handle(req, res);
 
   res.statusCode = 500;
-  res.end('Invalid server export: expected function or Express app');
+  res.end("❌ Invalid server export: expected function or Express app.");
 }
