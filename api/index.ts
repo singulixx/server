@@ -1,4 +1,7 @@
 // api/index.ts
+import path from "path";
+import { pathToFileURL } from "url";
+
 export const config = {
   api: {
     bodyParser: false,
@@ -13,21 +16,22 @@ let cachedApp: any | null = null;
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  const tryImport = async (path: string) => {
+  const tryImport = async (p: string) => {
     try {
-      const mod = await import(path);
+      const filePath = path.join(process.cwd(), p);
+      const fileUrl = pathToFileURL(filePath).href;
+      const mod = await import(fileUrl);
       const app = mod.default || mod;
       if (app) return app;
     } catch (err) {}
     return null;
   };
 
-  // Sesuai hasil build kamu, urutan path yang benar:
   const paths = [
-    "../dist/src/app.js",  // ✅ yang kamu punya
-    "../dist/src/index.js",
-    "../dist/app.js",
-    "../dist/index.js",
+    "dist/src/app.js",   // ✅ hasil build utama kamu
+    "dist/src/index.js",
+    "dist/app.js",
+    "dist/index.js",
   ];
 
   for (const p of paths) {
@@ -48,7 +52,7 @@ export default async function handler(req: any, res: any) {
   if (!app) {
     res.statusCode = 500;
     res.end(
-      "❌ Server entry not found. Checked ../dist/src/app.js, ../dist/src/index.js, ../dist/app.js, ../dist/index.js"
+      "❌ Server entry not found. Tried dist/src/app.js, dist/src/index.js, dist/app.js, dist/index.js"
     );
     return;
   }
