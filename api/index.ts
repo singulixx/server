@@ -13,31 +13,30 @@ let cachedApp: any | null = null;
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  // 1️⃣ Try runtime source (dev mode)
-  try {
-    const mod = await import("../src/app.js"); // local run (ts-node)
-    cachedApp = mod.default || mod;
-    if (cachedApp) return cachedApp;
-  } catch (err) {
-    // ignore
-  }
+  const tryImport = async (path: string) => {
+    try {
+      const mod = await import(path);
+      const app = mod.default || mod;
+      if (app) return app;
+    } catch (err) {}
+    return null;
+  };
 
-  // 2️⃣ Try compiled app (most common)
-  try {
-    const mod = await import("../dist/app.js"); // ⬅️ FIXED PATH
-    cachedApp = mod.default || mod;
-    if (cachedApp) return cachedApp;
-  } catch (err) {
-    // ignore
-  }
+  // Sesuai hasil build kamu, urutan path yang benar:
+  const paths = [
+    "../dist/src/app.js",  // ✅ yang kamu punya
+    "../dist/src/index.js",
+    "../dist/app.js",
+    "../dist/index.js",
+  ];
 
-  // 3️⃣ Try compiled index (alternative)
-  try {
-    const mod = await import("../dist/index.js");
-    cachedApp = mod.default || mod;
-    if (cachedApp) return cachedApp;
-  } catch (err) {
-    // ignore
+  for (const p of paths) {
+    const app = await tryImport(p);
+    if (app) {
+      console.log(`[✅] Loaded Express app from ${p}`);
+      cachedApp = app;
+      return cachedApp;
+    }
   }
 
   return null;
@@ -49,7 +48,7 @@ export default async function handler(req: any, res: any) {
   if (!app) {
     res.statusCode = 500;
     res.end(
-      "❌ Server entry not found. Checked ../src/app.js, ../dist/app.js, ../dist/index.js."
+      "❌ Server entry not found. Checked ../dist/src/app.js, ../dist/src/index.js, ../dist/app.js, ../dist/index.js"
     );
     return;
   }
