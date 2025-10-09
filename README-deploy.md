@@ -77,3 +77,7 @@ If you want, I can:
 - a) remove the secret from `.env.example` and instead create a `secrets.todo` file with instructions.
 - b) patch the code to log a warning if marketplace_mode is `shopee` but the SHOPEE_PARTNER_KEY is missing.
 
+
+
+# Auto-fix: Vercel server entry wrappers added
+This project lacked the expected `dist/src/app.js` or `dist/src/index.js` entry that Vercel checks for. I created wrapper files at `dist/src/app.js` and `dist/src/index.js` to point to your actual built app. Prefer updating your build output to generate files in `dist/src/` or set Vercel build output accordingly.
