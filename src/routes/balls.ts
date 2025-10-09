@@ -4,17 +4,20 @@ import type { Express } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { prisma } from "../db.js";
 import { authRequired } from "../utils/auth.js";
 import { audit } from "../utils/audit.js";
 
 const r = Router();
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
-const ABS_UPLOAD_DIR = path.resolve(process.cwd(), UPLOAD_DIR);
+// Gunakan /tmp untuk serverless environment (seperti Vercel)
+const isServerless = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+const uploadBase = isServerless ? os.tmpdir() : process.cwd();
+const UPLOAD_DIR = path.join(uploadBase, "uploads");
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// Pastikan folder upload ada
-fs.mkdirSync(ABS_UPLOAD_DIR, { recursive: true });
+const ABS_UPLOAD_DIR = UPLOAD_DIR;
 
 // Auto-generate Ball code if not provided: BALL-YYYYMM-####
 async function generateBallCode() {
@@ -73,7 +76,7 @@ const upload = multer({
 // Middleware auth
 r.use(authRequired);
 
-// Map status from Frontend to Prisma enum
+// Map status dari frontend ke Prisma enum
 function mapStatus(feStatus: string): "UNOPENED" | "OPENED" | "SORTED" {
   switch (feStatus) {
     case "BELUM_DIBUKA":
@@ -91,13 +94,10 @@ function mapStatus(feStatus: string): "UNOPENED" | "OPENED" | "SORTED" {
 r.post("/", upload.array("nota", 5), async (req, res) => {
   try {
     const u = (req as any).user;
-    const { code, asal, kategori, supplier, beratKg, hargaBeli, status } =
-      req.body;
+    const { code, asal, kategori, supplier, beratKg, hargaBeli, status } = req.body;
 
     if (!asal || !kategori || !supplier) {
-      return res
-        .status(400)
-        .json({ error: "asal, kategori, supplier wajib diisi" });
+      return res.status(400).json({ error: "asal, kategori, supplier wajib diisi" });
     }
 
     const weight = parseFloat(beratKg);
@@ -137,7 +137,7 @@ r.post("/", upload.array("nota", 5), async (req, res) => {
         weightKg: weight,
         buyPrice: buy,
         status: mapStatus(status),
-        docUrl: docUrls.length > 0 ? JSON.stringify(docUrls) : null, // Simpan JSON string array
+        docUrl: docUrls.length > 0 ? JSON.stringify(docUrls) : null,
         createdBy: u?.id ?? null,
       },
     });
@@ -155,7 +155,6 @@ r.post("/", upload.array("nota", 5), async (req, res) => {
 
     res.json(created);
   } catch (err: any) {
-    // Tangani error unique Prisma
     if (err?.code === "P2002") {
       return res.status(400).json({ error: "Code sudah digunakan" });
     }
@@ -175,15 +174,13 @@ r.put("/:id", upload.array("nota", 5), async (req, res) => {
     const { code, asal, kategori, supplier, beratKg, hargaBeli, status } =
       req.body;
 
-    // Lock perubahan code pada update
+    // Lock perubahan code
     if (typeof code !== "undefined") {
       const existing = await prisma.ball.findUnique({ where: { id } });
       if (!existing)
         return res.status(404).json({ error: "Ball tidak ditemukan" });
       if (String(code).trim() !== existing.code) {
-        return res
-          .status(400)
-          .json({ error: "Perubahan 'code' tidak diizinkan" });
+        return res.status(400).json({ error: "Perubahan 'code' tidak diizinkan" });
       }
     }
 
@@ -230,7 +227,6 @@ r.put("/:id", upload.array("nota", 5), async (req, res) => {
 });
 
 // ---------- LIST ----------
-
 r.get("/", async (req, res) => {
   try {
     const { status, origin, supplier, limit, offset, skip } = req.query as any;
@@ -254,7 +250,7 @@ r.get("/", async (req, res) => {
   }
 });
 
-// ---------- CATEGORIES (letakkan sebelum '/:id' agar tidak ketabrak) ----------
+// ---------- CATEGORIES ----------
 r.get("/categories", async (_req, res) => {
   try {
     const categories = await prisma.ball.findMany({
@@ -285,7 +281,7 @@ r.get("/:id", async (req, res) => {
   }
 });
 
-// ---------- UPDATE DOCS (replace list) ----------
+// ---------- UPDATE DOCS ----------
 r.put("/:id/docs", async (req, res) => {
   try {
     const u = (req as any).user;
@@ -305,13 +301,11 @@ r.put("/:id/docs", async (req, res) => {
     return res.json(updated);
   } catch (err: any) {
     console.error("❌ Update Ball docs error:", err);
-    return res
-      .status(400)
-      .json({ error: err?.message || "Gagal update dokumen Ball" });
+    return res.status(400).json({ error: err?.message || "Gagal update dokumen Ball" });
   }
 });
 
-// ---------- DELETE ONE DOC (remove single url from list) ----------
+// ---------- DELETE DOC ----------
 r.delete("/:id/docs", async (req, res) => {
   try {
     const u = (req as any).user;
@@ -348,9 +342,7 @@ r.delete("/:id/docs", async (req, res) => {
     return res.json(updated);
   } catch (err: any) {
     console.error("❌ Delete Ball doc error:", err);
-    return res
-      .status(400)
-      .json({ error: err?.message || "Gagal hapus dokumen Ball" });
+    return res.status(400).json({ error: err?.message || "Gagal hapus dokumen Ball" });
   }
 });
 
