@@ -1,9 +1,7 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "singulix/server/package.json", "use": "@vercel/node" }
-  ],
   "routes": [
-    { "src": "/(.*)", "dest": "/singulix/server/dist/src/index.js" }
+    { "src": "/", "dest": "/api/index.ts" },
+    { "src": "/api/(.*)", "dest": "/api/index.ts" }
   ]
 }
