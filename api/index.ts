@@ -20,7 +20,12 @@ async function loadApp() {
   const base = process.cwd();
   console.log("🧭 Working directory:", base);
 
+  // urutan kandidat baru (tanpa dist/)
   const candidates = [
+    "src/app.js",
+    "src/index.js",
+    "app.js",
+    "index.js",
     "dist/src/app.js",
     "dist/src/index.js",
     "dist/app.js",
@@ -29,16 +34,13 @@ async function loadApp() {
 
   for (const rel of candidates) {
     const abs = path.join(base, rel);
-    const exists = fs.existsSync(abs);
-    console.log(`🔍 Checking ${abs} => ${exists ? "✅ exists" : "❌ not found"}`);
-
-    if (!exists) continue;
+    if (!fs.existsSync(abs)) continue;
 
     try {
       const mod = await import(pathToFileURL(abs).href);
       const app = mod.default || mod;
       if (app) {
-        console.log(`🚀 Loaded app from ${rel}`);
+        console.log(`✅ Loaded app from ${rel}`);
         cachedApp = app;
         return cachedApp;
       }
@@ -47,7 +49,6 @@ async function loadApp() {
     }
   }
 
-  console.error("❌ No valid app found in candidates");
   return null;
 }
 
@@ -56,7 +57,7 @@ export default async function handler(req: any, res: any) {
 
   if (!app) {
     res.statusCode = 500;
-    res.end("❌ Server entry not found. Tried dist/src/app.js, dist/src/index.js, dist/app.js, dist/index.js");
+    res.end("❌ Server entry not found. Tried src/app.js, src/index.js, app.js, index.js, dist/src/app.js, dist/app.js, dist/index.js");
     return;
   }
 
