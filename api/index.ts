@@ -1,5 +1,6 @@
 // api/index.ts
 import path from "path";
+import fs from "fs";
 import { pathToFileURL } from "url";
 
 export const config = {
@@ -16,33 +17,37 @@ let cachedApp: any | null = null;
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  const tryImport = async (p: string) => {
-    try {
-      const filePath = path.join(process.cwd(), p);
-      const fileUrl = pathToFileURL(filePath).href;
-      const mod = await import(fileUrl);
-      const app = mod.default || mod;
-      if (app) return app;
-    } catch (err) {}
-    return null;
-  };
+  const base = process.cwd();
+  console.log("🧭 Working directory:", base);
 
-  const paths = [
-    "dist/src/app.js",   // ✅ hasil build utama kamu
+  const candidates = [
+    "dist/src/app.js",
     "dist/src/index.js",
     "dist/app.js",
     "dist/index.js",
   ];
 
-  for (const p of paths) {
-    const app = await tryImport(p);
-    if (app) {
-      console.log(`[✅] Loaded Express app from ${p}`);
-      cachedApp = app;
-      return cachedApp;
+  for (const rel of candidates) {
+    const abs = path.join(base, rel);
+    const exists = fs.existsSync(abs);
+    console.log(`🔍 Checking ${abs} => ${exists ? "✅ exists" : "❌ not found"}`);
+
+    if (!exists) continue;
+
+    try {
+      const mod = await import(pathToFileURL(abs).href);
+      const app = mod.default || mod;
+      if (app) {
+        console.log(`🚀 Loaded app from ${rel}`);
+        cachedApp = app;
+        return cachedApp;
+      }
+    } catch (err) {
+      console.error(`⚠️ Failed to import ${rel}:`, err);
     }
   }
 
+  console.error("❌ No valid app found in candidates");
   return null;
 }
 
@@ -51,13 +56,10 @@ export default async function handler(req: any, res: any) {
 
   if (!app) {
     res.statusCode = 500;
-    res.end(
-      "❌ Server entry not found. Tried dist/src/app.js, dist/src/index.js, dist/app.js, dist/index.js"
-    );
+    res.end("❌ Server entry not found. Tried dist/src/app.js, dist/src/index.js, dist/app.js, dist/index.js");
     return;
   }
 
-  // Express or function handler
   if (typeof app === "function") return app(req, res);
   if (app && typeof app.handle === "function") return app.handle(req, res);
 
