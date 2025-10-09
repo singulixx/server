@@ -8,6 +8,7 @@ import cors from "cors";
 import helmetPkg from "helmet";
 import compression from "compression";
 import authRouter from "./routes/auth.js";
+import procurementsRouter from "./routes/procurements.js";
 
 // normalize helmet export for ESM/CJS compatibility
 const helmet = (helmetPkg as any).default ?? helmetPkg;
@@ -64,6 +65,7 @@ app.get("/api/health", (_req: Request, res: Response) => {
 
 // Register routes
 app.use("/api/auth", authRouter);
+app.use("/api/procurements", procurementsRouter);
 
 // Global error handler
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
