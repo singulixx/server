@@ -10,7 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node ./dist/index.js",
     "build": "tsc -p tsconfig.json",
-    "vercel-build": "npm run build && echo '\u2705 Build completed for Vercel'",
+    "vercel-build": "npm run build && echo '✅ Build completed for Vercel'",
     "postinstall": "prisma generate",
     "db:deploy": "prisma migrate deploy",
     "db:dev": "prisma migrate dev --name init",
@@ -24,8 +24,7 @@
     "migrate:init": "prisma migrate dev --name init",
     "migrate:deploy": "prisma migrate deploy",
     "migrate:reset": "prisma migrate reset",
-    "build:local": "tsc -p tsconfig.json",
-    "dev:sqlite": "cross-env DEV_DB=sqlite npm run dev"
+    "build:local": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
