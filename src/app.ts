@@ -13,6 +13,11 @@ import authRouter from "./routes/auth.js";
 const helmet = (helmetPkg as any).default ?? helmetPkg;
 
 const app = express();
+// Startup env checks
+if (!process.env.DATABASE_URL) {
+  console.warn('⚠️ DATABASE_URL not set — if you are testing locally you can use DEV_DB=sqlite or set DATABASE_URL to Neon/Supabase.');
+}
+
 
 /** ✅ Setup CORS allowlist */
 const allowlist = (

@@ -8,12 +8,13 @@ import compression from "compression";
 // Routes
 import authRouter from "./routes/auth.js";
 const app = express();
+// Startup env checks
+if (!process.env.DATABASE_URL) {
+  console.warn('⚠️ DATABASE_URL not set — if you are testing locally you can use DEV_DB=sqlite or set DATABASE_URL to Neon/Supabase.');
+}
+
 /** ✅ CORS allowlist */
-const allowlist = (process.env.CORS_ORIGIN ??
-    "https://web-mocha-eight-45.vercel.app,http://localhost:5432")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+const allowlist = (process.env.CORS_ORIGIN ?? "https://web-mocha-eight-45.vercel.app,http://localhost:3000").split(",").map((s) => s.trim()).filter(Boolean);
 app.use(cors({
     origin(origin, cb) {
         // Allow SSR/curl requests
