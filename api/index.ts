@@ -1,5 +1,7 @@
 // api/index.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import path from 'path';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 export const config = {
   api: {
@@ -10,21 +12,37 @@ export const config = {
   memory: 1024,
 };
 
+// Untuk dapatkan __dirname versi ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 let cachedApp: any | null = null;
 
 async function loadApp() {
   if (cachedApp) return cachedApp;
 
-  try {
-    // Explicit extension needed when using "NodeNext"
-    const mod = await import('../src/app.js');
-    cachedApp = mod.default || mod;
-    console.log('✅ Loaded app from src/app.ts');
-    return cachedApp;
-  } catch (err) {
-    console.error('❌ Failed to load app:', err);
-    return null;
+  const candidates = [
+    '../dist/src/app.js',
+    '../dist/app.js',
+    '../src/app.js',
+    '../app.js',
+  ];
+
+  for (const candidate of candidates) {
+    const fullPath = path.resolve(__dirname, candidate);
+    console.log('🔍 Checking', fullPath);
+    try {
+      const mod = await import(pathToFileURL(fullPath).href);
+      cachedApp = mod.default || mod;
+      console.log('✅ Loaded app from', candidate);
+      return cachedApp;
+    } catch (err) {
+      // lanjut ke kandidat berikut
+    }
   }
+
+  console.error('❌ No valid app found in any candidate paths');
+  return null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
