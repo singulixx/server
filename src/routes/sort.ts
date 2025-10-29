@@ -12,6 +12,20 @@ interface ProductData {
 }
 
 const r = Router();
+
+async function recomputeBallTotal(ballId: number) {
+  const sums = await prisma.sortSession.aggregate({
+    where: { ballId },
+    _sum: { gradeA: true, gradeB: true, reject: true },
+  });
+  const ga = sums._sum.gradeA ?? 0;
+  const gb = sums._sum.gradeB ?? 0;
+  const rj = sums._sum.reject ?? 0;
+  const total = ga + gb + rj;
+  await prisma.ball.update({ where: { id: ballId }, data: { totalPcsOpened: total } });
+  return total;
+}
+
 r.use(authRequired);
 
 // POST berdasarkan ball code
@@ -82,6 +96,9 @@ r.post("/:code", async (req, res) => {
     reject,
     products: created.map((p) => p.id),
   });
+  try {
+    await recomputeBallTotal(ball.id);
+  } catch(e) { console.error(e); }
   res.json({ sort, products: created });
 });
 
@@ -112,7 +129,11 @@ r.put('/:id', async (req, res) => {
     await prisma.ball.update({ where: { id: sess.ballId }, data: { totalPcsOpened: total } });
   }
 } catch {}
-res.json(updated);
+try {
+    const sess = await prisma.sortSession.findUnique({ where: { id } });
+    if (sess) await recomputeBallTotal(sess.ballId);
+  } catch(e) { console.error(e); }
+  res.json(updated);
 
 });
 
