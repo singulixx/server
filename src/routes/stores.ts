@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db.js";
+import { shopeeAuthUrl } from "../services/shopee.js";
 import { authRequired } from "../utils/auth.js";
 import { setCacheHeaders } from "../utils/cache.js"; // <-- pastikan ini ada
 
@@ -11,10 +12,12 @@ router.use(authRequired);
 router.get("/", async (req, res) => {
   const { limit, offset, skip } = req.query as any;
   const take = Math.min(Math.max(parseInt(String(limit)) || 50, 1), 100);
-  const off = Number.isFinite(Number(offset)) ? Number(offset) : (Number(skip) || 0);
+  const off = Number.isFinite(Number(offset))
+    ? Number(offset)
+    : Number(skip) || 0;
   const [items, total] = await Promise.all([
     prisma.store.findMany({ orderBy: { createdAt: "desc" }, take, skip: off }),
-    prisma.store.count()
+    prisma.store.count(),
   ]);
   if (setCacheHeaders(req, res, items)) return;
   res.json({ items, total, limit: take, offset: off });
@@ -24,7 +27,8 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { name, type } = req.body;
-    if (!name || !type) return res.status(400).json({ error: "name & type required" });
+    if (!name || !type)
+      return res.status(400).json({ error: "name & type required" });
     const store = await prisma.store.create({ data: { name, type } });
     res.json(store);
   } catch (err: any) {
@@ -63,16 +67,49 @@ router.get("/:id/status", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const store = await prisma.store.findUnique({ where: { id } });
-    if (!store) return res.status(404).json({ connected: false, message: "Store not found" });
+    if (!store)
+      return res
+        .status(404)
+        .json({ connected: false, message: "Store not found" });
 
     const t = (store.type || "").toUpperCase();
-    if (t !== "SHOPEE") return res.json({ connected: true, message: "Manual channel" });
+    if (t !== "SHOPEE")
+      return res.json({ connected: true, message: "Manual channel" });
 
-    const connected = !!store.apiKey || (!!store.partnerId && !!store.secretKey);
+    const connected =
+      !!store.apiKey || (!!store.partnerId && !!store.secretKey);
     res.json({ connected });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ connected: false, message: "Status error" });
+  }
+});
+
+router.post("/:id/shopee/connect", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { name, type } = req.body || {};
+    if (!name || !type)
+      return res.status(400).json({ error: "name & type required" });
+
+    const store = await prisma.store.findUnique({ where: { id } });
+    if (!store) return res.status(404).json({ error: "Store not found" });
+
+    const t = (type || "").toUpperCase();
+    if (t !== "SHOPEE")
+      return res.status(400).json({ error: "Invalid store type" });
+
+    // Build auth URL (uses env vars in services/shopee.ts)
+    try {
+      const authUrl: string = shopeeAuthUrl();
+      return res.json({ url: authUrl });
+    } catch (err: any) {
+      console.error("shopeeAuthUrl error:", err);
+      return res.status(500).json({ error: "failed_build_auth_url" });
+    }
+  } catch (err: any) {
+    console.error("POST /:id/shopee/connect error:", err);
+    res.status(500).json({ error: err?.message || "internal_error" });
   }
 });
 
