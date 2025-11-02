@@ -45,8 +45,11 @@ function sign(
 export function shopeeAuthUrl() {
   const partnerId = process.env.SHOPEE_PARTNER_ID!;
   const redirect = process.env.SHOPEE_REDIRECT_URL!;
-  const useMerchant = (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
-  const path = useMerchant ? "/api/v2/merchant/auth_partner" : "/api/v2/shop/auth_partner";
+  const useMerchant =
+    (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
+  const path = useMerchant
+    ? "/api/v2/merchant/auth_partner"
+    : "/api/v2/shop/auth_partner";
   const t = ts();
   const s = sign(process.env.SHOPEE_PARTNER_KEY!, path, partnerId, t);
   const u = new URL(baseUrl() + path);
@@ -75,14 +78,24 @@ function credsFromAccount(ch: any): ShopeeCreds {
     partnerId: process.env.SHOPEE_PARTNER_ID!,
     partnerKey: process.env.SHOPEE_PARTNER_KEY!,
     redirectUrl: process.env.SHOPEE_REDIRECT_URL!,
-    isMerchant: (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true",
+    isMerchant:
+      (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true",
     baseUrl: process.env.SHOPEE_BASE_URL || "https://partner.shopeemobile.com",
     accessToken: c.access_token ?? null,
     refreshToken: c.refresh_token ?? null,
     expireAt: c.expire_at ?? null,
-    shopId: typeof c.shop_id === "number" ? c.shop_id : c.shop_id ? Number(c.shop_id) : null,
+    shopId:
+      typeof c.shop_id === "number"
+        ? c.shop_id
+        : c.shop_id
+        ? Number(c.shop_id)
+        : null,
     merchantId:
-      typeof c.merchant_id === "number" ? c.merchant_id : c.merchant_id ? Number(c.merchant_id) : null,
+      typeof c.merchant_id === "number"
+        ? c.merchant_id
+        : c.merchant_id
+        ? Number(c.merchant_id)
+        : null,
     region: c.region ?? null,
   };
 }
@@ -94,7 +107,10 @@ async function saveCreds(chId: number, patch: Record<string, any>) {
       ? (ch.credentials as Record<string, any>)
       : {};
   const merged = { ...existing, ...patch };
-  await prisma.channelAccount.update({ where: { id: chId }, data: { credentials: merged } });
+  await prisma.channelAccount.update({
+    where: { id: chId },
+    data: { credentials: merged },
+  });
   return merged;
 }
 
@@ -109,10 +125,15 @@ async function fetchJson(url: string, init?: RequestInit) {
   return data;
 }
 
-export async function shopeeExchangeToken(code: string, shop_id?: number, merchant_id?: number) {
+export async function shopeeExchangeToken(
+  code: string,
+  shop_id?: number,
+  merchant_id?: number
+) {
   const partnerId = process.env.SHOPEE_PARTNER_ID!;
   const partnerKey = process.env.SHOPEE_PARTNER_KEY!;
-  const p = (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
+  const p =
+    (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
   const path = "/api/v2/auth/token/get";
   const t = ts();
   const s = sign(partnerKey, path, partnerId, t);
@@ -130,7 +151,8 @@ export async function shopeeExchangeToken(code: string, shop_id?: number, mercha
 
   // Shopee may return different shapes; be defensive
   if (data == null) throw new Error("Shopee: empty response");
-  if ((data as any).error) throw new Error("Failed to get token: " + JSON.stringify(data));
+  if ((data as any).error)
+    throw new Error("Failed to get token: " + JSON.stringify(data));
   return data;
 }
 
@@ -141,7 +163,11 @@ export async function shopeeRefreshToken(chId: number) {
   const t = ts();
   const s = sign(c.partnerKey, path, c.partnerId, t);
   const query: any = { partner_id: c.partnerId, timestamp: t, sign: s };
-  const body: any = { refresh_token: c.refreshToken, shop_id: c.shopId, merchant_id: c.merchantId };
+  const body: any = {
+    refresh_token: c.refreshToken,
+    shop_id: c.shopId,
+    merchant_id: c.merchantId,
+  };
   const url = c.baseUrl + path + "?" + new URLSearchParams(query).toString();
 
   const data = await fetchJson(url, {
@@ -151,7 +177,8 @@ export async function shopeeRefreshToken(chId: number) {
   });
 
   if (!data) throw new Error("refresh failed: empty response");
-  if ((data as any).error) throw new Error("refresh failed " + JSON.stringify(data));
+  if ((data as any).error)
+    throw new Error("refresh failed " + JSON.stringify(data));
 
   const access_token = (data as any).access_token ?? null;
   const refresh_token = (data as any).refresh_token ?? c.refreshToken ?? null;
@@ -169,7 +196,11 @@ export async function shopeeRefreshToken(chId: number) {
 async function ensureValidToken(chId: number) {
   const ch = await getAccountOrThrow(chId);
   const c = credsFromAccount(ch);
-  if (!c.accessToken || !c.expireAt || c.expireAt < Math.floor(Date.now() / 1000) + 300) {
+  if (
+    !c.accessToken ||
+    !c.expireAt ||
+    c.expireAt < Math.floor(Date.now() / 1000) + 300
+  ) {
     return shopeeRefreshToken(chId);
   }
   return { access_token: c.accessToken };
@@ -183,7 +214,14 @@ export async function shopeeGetOrders(chId: number, days = 3) {
   const path = "/api/v2/order/get_order_list";
   const useMerchant = !!c.merchantId;
   const shopOrMerchant = useMerchant ? c.merchantId : c.shopId;
-  const s = sign(c.partnerKey, path, c.partnerId, t, c.accessToken, shopOrMerchant ?? undefined);
+  const s = sign(
+    c.partnerKey,
+    path,
+    c.partnerId,
+    t,
+    c.accessToken,
+    shopOrMerchant ?? undefined
+  );
 
   const now = Math.floor(Date.now() / 1000);
   const from = now - days * 24 * 3600;
@@ -205,7 +243,10 @@ export async function shopeeGetOrders(chId: number, days = 3) {
   return data;
 }
 
-export async function shopeeUpdateStock(chId: number, items: Array<{ item_id: string; stock: number }>) {
+export async function shopeeUpdateStock(
+  chId: number,
+  items: Array<{ item_id: string; stock: number }>
+) {
   const ch = await getAccountOrThrow(chId);
   const c = credsFromAccount(ch);
   await ensureValidToken(chId);
@@ -213,7 +254,14 @@ export async function shopeeUpdateStock(chId: number, items: Array<{ item_id: st
   const path = "/api/v2/product/stock/update";
   const useMerchant = !!c.merchantId;
   const shopOrMerchant = useMerchant ? c.merchantId : c.shopId;
-  const s = sign(c.partnerKey, path, c.partnerId, t, c.accessToken, shopOrMerchant ?? undefined);
+  const s = sign(
+    c.partnerKey,
+    path,
+    c.partnerId,
+    t,
+    c.accessToken,
+    shopOrMerchant ?? undefined
+  );
 
   const query: any = {
     partner_id: c.partnerId,
@@ -225,7 +273,9 @@ export async function shopeeUpdateStock(chId: number, items: Array<{ item_id: st
   else query.shop_id = c.shopId;
 
   const url = c.baseUrl + path + "?" + new URLSearchParams(query).toString();
-  const body = { stock_list: items.map((i) => ({ item_id: i.item_id, stock: i.stock })) };
+  const body = {
+    stock_list: items.map((i) => ({ item_id: i.item_id, stock: i.stock })),
+  };
 
   const data = await fetchJson(url, {
     method: "POST",
@@ -233,6 +283,7 @@ export async function shopeeUpdateStock(chId: number, items: Array<{ item_id: st
     body: JSON.stringify(body),
   });
 
-  if ((data as any).error) throw new Error("update stock error " + JSON.stringify(data));
+  if ((data as any).error)
+    throw new Error("update stock error " + JSON.stringify(data));
   return data;
 }
