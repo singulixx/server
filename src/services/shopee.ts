@@ -18,7 +18,10 @@ type ShopeeCreds = {
 };
 
 function baseUrl() {
-  return process.env.SHOPEE_BASE_URL || "https://partner.test-stable.shopeemobile.com";
+  return (
+    process.env.SHOPEE_BASE_URL ||
+    "https://partner.test-stable.shopeemobile.com"
+  );
 }
 
 function ts() {
@@ -39,7 +42,13 @@ function sign(
     timestamp +
     (accessToken || "") +
     (shopOrMerchantId != null ? String(shopOrMerchantId) : "");
-  return crypto.createHmac("sha256", partnerKey).update(base).digest("hex");
+
+  // 🔧 Fix: convert Shopee HEX partner key (prefixed with "shpk") to Buffer
+  const key = partnerKey.startsWith("shpk")
+    ? Buffer.from(partnerKey.replace(/^shpk/, ""), "hex")
+    : partnerKey;
+
+  return crypto.createHmac("sha256", key).update(base).digest("hex");
 }
 
 export function shopeeAuthUrl() {
@@ -80,7 +89,9 @@ function credsFromAccount(ch: any): ShopeeCreds {
     redirectUrl: process.env.SHOPEE_REDIRECT_URL!,
     isMerchant:
       (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true",
-    baseUrl: process.env.SHOPEE_BASE_URL || "https://partner.test-stable.shopeemobile.com",
+    baseUrl:
+      process.env.SHOPEE_BASE_URL ||
+      "https://partner.test-stable.shopeemobile.com",
     accessToken: c.access_token ?? null,
     refreshToken: c.refresh_token ?? null,
     expireAt: c.expire_at ?? null,
