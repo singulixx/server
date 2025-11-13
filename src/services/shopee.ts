@@ -19,7 +19,7 @@ type ShopeeCreds = {
 
 function baseUrl() {
   return (
-    process.env.SHOPEE_BASE_URL ||
+    (process.env.SHOPEE_BASE_URL && process.env.SHOPEE_BASE_URL.trim()) ||
     "https://partner.test-stable.shopeemobile.com"
   );
 }
@@ -28,6 +28,17 @@ function ts() {
   return Math.floor(Date.now() / 1000);
 }
 
+/**
+ * sign - builds HMAC-SHA256 signature used by Shopee API.
+ *
+ * base string = partner_id + path + timestamp + (access_token || "") + (shopOrMerchantId || "")
+ *
+ * partnerKey may be:
+ *  - "shpk..." hex prefixed (needs hex decode)
+ *  - plain string
+ *
+ * This function trims the key and handles uppercase/lowercase "shpk" safely.
+ */
 function sign(
   partnerKey: string,
   path: string,
@@ -36,31 +47,64 @@ function sign(
   accessToken?: string | null,
   shopOrMerchantId?: string | number | null
 ) {
+  // ensure inputs are strings/numbers and trimmed
+  const partnerIdStr = String(partnerId).trim();
+  const pathStr = String(path).trim();
+  const tsStr = String(timestamp);
+
   const base =
-    partnerId +
-    path +
-    timestamp +
+    partnerIdStr +
+    pathStr +
+    tsStr +
     (accessToken || "") +
     (shopOrMerchantId != null ? String(shopOrMerchantId) : "");
 
-  // 🔧 Fix: convert Shopee HEX partner key (prefixed with "shpk") to Buffer
-  const key = partnerKey.startsWith("shpk")
-    ? Buffer.from(partnerKey.replace(/^shpk/, ""), "hex")
-    : partnerKey;
+  // normalize partnerKey: trim and handle "shpk" hex prefix case-insensitive
+  const keyRaw = (partnerKey ?? "").toString().trim();
+  let keyForHmac: string | Buffer = keyRaw;
 
-  return crypto.createHmac("sha256", key).update(base).digest("hex");
+  if (keyRaw.length === 0) {
+    throw new Error("Shopee partner key is empty");
+  }
+
+  if (keyRaw.toLowerCase().startsWith("shpk")) {
+    const hexPart = keyRaw.replace(/^shpk/i, "");
+    try {
+      keyForHmac = Buffer.from(hexPart, "hex");
+    } catch (e) {
+      throw new Error("Invalid Shopee partner key hex encoding");
+    }
+  }
+
+  // create HMAC
+  const h = crypto.createHmac("sha256", keyForHmac);
+  h.update(base);
+  const digest = h.digest("hex");
+
+  // --- debug (uncomment when needed) ---
+  // console.log("SHOPEE SIGN DEBUG:", { path: pathStr, timestamp: tsStr, base, computed_sign: digest });
+  // --------------------------------------
+
+  return digest;
 }
 
 export function shopeeAuthUrl() {
-  const partnerId = process.env.SHOPEE_PARTNER_ID!;
-  const redirect = process.env.SHOPEE_REDIRECT_URL!;
+  const partnerId = (process.env.SHOPEE_PARTNER_ID || "").trim();
+  const redirect = (process.env.SHOPEE_REDIRECT_URL || "").trim();
+  const partnerKey = (process.env.SHOPEE_PARTNER_KEY || "").trim();
+
+  if (!partnerId) throw new Error("Missing SHOPEE_PARTNER_ID");
+  if (!partnerKey) throw new Error("Missing SHOPEE_PARTNER_KEY");
+  if (!redirect) throw new Error("Missing SHOPEE_REDIRECT_URL");
+
   const useMerchant =
     (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
   const path = useMerchant
     ? "/api/v2/merchant/auth_partner"
     : "/api/v2/shop/auth_partner";
   const t = ts();
-  const s = sign(process.env.SHOPEE_PARTNER_KEY!, path, partnerId, t);
+  const s = sign(partnerKey, path, partnerId, t);
+
   const u = new URL(baseUrl() + path);
   u.searchParams.set("partner_id", partnerId);
   u.searchParams.set("timestamp", String(t));
@@ -77,21 +121,18 @@ async function getAccountOrThrow(id: number) {
 }
 
 function credsFromAccount(ch: any): ShopeeCreds {
-  // Defensive: credentials may be JsonValue (string/number/object/null). Only treat as object when it's object.
   const c =
     ch && typeof ch.credentials === "object" && ch.credentials !== null
       ? (ch.credentials as Record<string, any>)
       : {};
 
   return {
-    partnerId: process.env.SHOPEE_PARTNER_ID!,
-    partnerKey: process.env.SHOPEE_PARTNER_KEY!,
-    redirectUrl: process.env.SHOPEE_REDIRECT_URL!,
+    partnerId: (process.env.SHOPEE_PARTNER_ID || "").trim(),
+    partnerKey: (process.env.SHOPEE_PARTNER_KEY || "").trim(),
+    redirectUrl: (process.env.SHOPEE_REDIRECT_URL || "").trim(),
     isMerchant:
       (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true",
-    baseUrl:
-      process.env.SHOPEE_BASE_URL ||
-      "https://partner.test-stable.shopeemobile.com",
+    baseUrl: baseUrl(),
     accessToken: c.access_token ?? null,
     refreshToken: c.refresh_token ?? null,
     expireAt: c.expire_at ?? null,
@@ -131,7 +172,6 @@ async function fetchJson(url: string, init?: RequestInit) {
     const txt = await res.text();
     throw new Error(`Fetch ${url} failed ${res.status}: ${txt}`);
   }
-  // cast to any to safely access properties later
   const data = (await res.json()) as any;
   return data;
 }
@@ -141,8 +181,8 @@ export async function shopeeExchangeToken(
   shop_id?: number,
   merchant_id?: number
 ) {
-  const partnerId = process.env.SHOPEE_PARTNER_ID!;
-  const partnerKey = process.env.SHOPEE_PARTNER_KEY!;
+  const partnerId = (process.env.SHOPEE_PARTNER_ID || "").trim();
+  const partnerKey = (process.env.SHOPEE_PARTNER_KEY || "").trim();
   const p =
     (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
   const path = "/api/v2/auth/token/get";
@@ -160,7 +200,6 @@ export async function shopeeExchangeToken(
     body: JSON.stringify(body),
   });
 
-  // Shopee may return different shapes; be defensive
   if (data == null) throw new Error("Shopee: empty response");
   if ((data as any).error)
     throw new Error("Failed to get token: " + JSON.stringify(data));
