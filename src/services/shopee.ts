@@ -18,7 +18,7 @@ type ShopeeCreds = {
 };
 
 function baseUrl() {
-  return process.env.SHOPEE_BASE_URL || "https://partner.shopeemobile.com";
+  return process.env.SHOPEE_BASE_URL || "https://partner.test-stable.shopeemobile.com";
 }
 
 function ts() {
@@ -80,7 +80,7 @@ function credsFromAccount(ch: any): ShopeeCreds {
     redirectUrl: process.env.SHOPEE_REDIRECT_URL!,
     isMerchant:
       (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true",
-    baseUrl: process.env.SHOPEE_BASE_URL || "https://partner.shopeemobile.com",
+    baseUrl: process.env.SHOPEE_BASE_URL || "https://partner.test-stable.shopeemobile.com",
     accessToken: c.access_token ?? null,
     refreshToken: c.refresh_token ?? null,
     expireAt: c.expire_at ?? null,
