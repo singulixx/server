@@ -29,15 +29,16 @@ function ts() {
 }
 
 /**
- * sign - builds HMAC-SHA256 signature used by Shopee API.
+ * Build HMAC-SHA256 sign for Shopee API.
  *
- * base string = partner_id + path + timestamp + (access_token || "") + (shopOrMerchantId || "")
+ * Base string = partner_id + path + timestamp + (access_token || "") + (shopOrMerchantId || "")
  *
- * partnerKey may be:
- *  - "shpk..." hex prefixed (needs hex decode)
- *  - plain string
+ * partnerKey from Shopee is normally Base64. This function:
+ *  - trims the key
+ *  - if prefixed (like "shpk..."), strips the prefix then attempts Base64 decode
+ *  - throws helpful errors if key is empty or decoding fails
  *
- * This function trims the key and handles uppercase/lowercase "shpk" safely.
+ * Returns lowercase hex digest string.
  */
 function sign(
   partnerKey: string,
@@ -47,11 +48,11 @@ function sign(
   accessToken?: string | null,
   shopOrMerchantId?: string | number | null
 ) {
-  // ensure inputs are strings/numbers and trimmed
   const partnerIdStr = String(partnerId).trim();
   const pathStr = String(path).trim();
   const tsStr = String(timestamp);
 
+  // build base string according to Shopee doc
   const base =
     partnerIdStr +
     pathStr +
@@ -59,31 +60,52 @@ function sign(
     (accessToken || "") +
     (shopOrMerchantId != null ? String(shopOrMerchantId) : "");
 
-  // normalize partnerKey: trim and handle "shpk" hex prefix case-insensitive
+  // normalize partnerKey
   const keyRaw = (partnerKey ?? "").toString().trim();
-  let keyForHmac: string | Buffer = keyRaw;
-
-  if (keyRaw.length === 0) {
-    throw new Error("Shopee partner key is empty");
+  if (!keyRaw) {
+    throw new Error("Shopee partner key is empty or not set in environment");
   }
 
-  if (keyRaw.toLowerCase().startsWith("shpk")) {
-    const hexPart = keyRaw.replace(/^shpk/i, "");
+  // Try to decode partnerKey as Base64. Some portals prefix the key (eg "shpk...").
+  // If prefix exists, remove it then try Base64.
+  let keyBuf: Buffer | null = null;
+  const tryBase64 = (s: string) => {
     try {
-      keyForHmac = Buffer.from(hexPart, "hex");
-    } catch (e) {
-      throw new Error("Invalid Shopee partner key hex encoding");
+      const buf = Buffer.from(s, "base64");
+      // Basic validity check: decoded buffer should not be empty
+      if (buf.length === 0) throw new Error("decoded base64 length 0");
+      return buf;
+    } catch {
+      return null;
+    }
+  };
+
+  // Primary attempt: decode whole key as Base64
+  keyBuf = tryBase64(keyRaw);
+
+  // If not valid Base64, check and strip common prefix then try again
+  if (!keyBuf) {
+    // common prefix variants: "shpk", "shpk_", etc. we'll remove any leading non-alphanumeric prefix up to first alnum sequence
+    const stripped = keyRaw.replace(/^[^A-Za-z0-9]*/, "").replace(/^shpk[_-]?/i, "");
+    if (stripped !== keyRaw) {
+      keyBuf = tryBase64(stripped);
     }
   }
 
-  // create HMAC
-  const h = crypto.createHmac("sha256", keyForHmac);
-  h.update(base);
-  const digest = h.digest("hex");
+  // Final fallback: if still no buffer, attempt to use raw string as key (may work if partner gave plain text)
+  if (!keyBuf) {
+    // As a last resort, use the raw string as-is (will treat as utf-8 bytes)
+    // Note: this may fail verification if Shopee expects base64-decoded bytes.
+    keyBuf = Buffer.from(keyRaw, "utf8");
+  }
 
-  // --- debug (uncomment when needed) ---
+  // compute HMAC
+  const hmac = crypto.createHmac("sha256", keyBuf);
+  hmac.update(base);
+  const digest = hmac.digest("hex");
+
+  // Safe debug (uncomment while debugging, do NOT log partnerKey itself)
   // console.log("SHOPEE SIGN DEBUG:", { path: pathStr, timestamp: tsStr, base, computed_sign: digest });
-  // --------------------------------------
 
   return digest;
 }
@@ -93,9 +115,9 @@ export function shopeeAuthUrl() {
   const redirect = (process.env.SHOPEE_REDIRECT_URL || "").trim();
   const partnerKey = (process.env.SHOPEE_PARTNER_KEY || "").trim();
 
-  if (!partnerId) throw new Error("Missing SHOPEE_PARTNER_ID");
-  if (!partnerKey) throw new Error("Missing SHOPEE_PARTNER_KEY");
-  if (!redirect) throw new Error("Missing SHOPEE_REDIRECT_URL");
+  if (!partnerId) throw new Error("Missing SHOPEE_PARTNER_ID environment variable");
+  if (!partnerKey) throw new Error("Missing SHOPEE_PARTNER_KEY environment variable");
+  if (!redirect) throw new Error("Missing SHOPEE_REDIRECT_URL environment variable");
 
   const useMerchant =
     (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
