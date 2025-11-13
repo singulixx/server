@@ -28,10 +28,7 @@ function ts() {
   return Math.floor(Date.now() / 1000);
 }
 
-/**
- * Generate signature for Shopee API
- * Format untuk auth: partner_id + api_path + timestamp
- */
+// ✅ FUNCTION BARU UNTUK AUTH SHOPEE
 function generateSignature(partnerKey: string, partnerId: string, path: string, timestamp: number): string {
   const baseString = `${partnerId}${path}${timestamp}`;
   
@@ -40,30 +37,18 @@ function generateSignature(partnerKey: string, partnerId: string, path: string, 
   console.log("Partner ID:", partnerId);
   console.log("Path:", path);
   console.log("Timestamp:", timestamp);
-  console.log("Partner Key (first 10 chars):", partnerKey.substring(0, 10) + "...");
+  console.log("Partner Key Length:", partnerKey.length);
 
-  try {
-    // Coba decode sebagai base64
-    let keyBuffer: Buffer;
-    try {
-      keyBuffer = Buffer.from(partnerKey, 'base64');
-      console.log("✅ Using Base64 decoded key");
-    } catch (e) {
-      // Jika gagal, gunakan sebagai plain text
-      console.log("⚠️  Base64 decode failed, using plain text key");
-      keyBuffer = Buffer.from(partnerKey, 'utf8');
-    }
+  // Untuk Shopee, biasanya partner key digunakan sebagai plain text
+  const keyBuffer = Buffer.from(partnerKey, 'utf8');
+  console.log("✅ Using plain text key (UTF-8)");
 
-    const hmac = crypto.createHmac('sha256', keyBuffer);
-    hmac.update(baseString);
-    const signature = hmac.digest('hex');
-    
-    console.log("✅ Generated Signature:", signature);
-    return signature;
-  } catch (error) {
-    console.error("❌ Signature generation error:", error);
-    throw new Error(`Failed to generate signature: ${error.message}`);
-  }
+  const hmac = crypto.createHmac('sha256', keyBuffer);
+  hmac.update(baseString);
+  const signature = hmac.digest('hex');
+  
+  console.log("✅ Generated Signature:", signature);
+  return signature;
 }
 
 /**
@@ -106,6 +91,8 @@ export function shopeeAuthUrl(): string {
       : "/api/v2/shop/auth_partner";
     
     const timestamp = ts();
+    
+    // ✅ GUNAKAN generateSignature YANG BARU
     const signature = generateSignature(partnerKey, partnerId, path, timestamp);
 
     // Build URL
