@@ -29,17 +29,102 @@ function ts() {
 }
 
 /**
- * Build HMAC-SHA256 sign for Shopee API.
- *
- * Base string = partner_id + path + timestamp + (access_token || "") + (shopOrMerchantId || "")
- *
- * partnerKey from Shopee is normally Base64. This function:
- *  - trims the key
- *  - if prefixed (like "shpk..."), strips the prefix then attempts Base64 decode
- *  - throws helpful errors if key is empty or decoding fails
- *
- * Returns lowercase hex digest string.
+ * Generate signature for Shopee API
+ * Format untuk auth: partner_id + api_path + timestamp
  */
+function generateSignature(partnerKey: string, partnerId: string, path: string, timestamp: number): string {
+  const baseString = `${partnerId}${path}${timestamp}`;
+  
+  console.log("🔐 Signature Debug:");
+  console.log("Base String:", baseString);
+  console.log("Partner ID:", partnerId);
+  console.log("Path:", path);
+  console.log("Timestamp:", timestamp);
+  console.log("Partner Key (first 10 chars):", partnerKey.substring(0, 10) + "...");
+
+  try {
+    // Coba decode sebagai base64
+    let keyBuffer: Buffer;
+    try {
+      keyBuffer = Buffer.from(partnerKey, 'base64');
+      console.log("✅ Using Base64 decoded key");
+    } catch (e) {
+      // Jika gagal, gunakan sebagai plain text
+      console.log("⚠️  Base64 decode failed, using plain text key");
+      keyBuffer = Buffer.from(partnerKey, 'utf8');
+    }
+
+    const hmac = crypto.createHmac('sha256', keyBuffer);
+    hmac.update(baseString);
+    const signature = hmac.digest('hex');
+    
+    console.log("✅ Generated Signature:", signature);
+    return signature;
+  } catch (error) {
+    console.error("❌ Signature generation error:", error);
+    throw new Error(`Failed to generate signature: ${error.message}`);
+  }
+}
+
+/**
+ * Debug function untuk memeriksa environment variables
+ */
+function debugEnvVariables() {
+  console.log("=== 🛠️ SHOPEE ENV DEBUG ===");
+  console.log("SHOPEE_PARTNER_ID:", process.env.SHOPEE_PARTNER_ID ? 
+    `${process.env.SHOPEE_PARTNER_ID.substring(0, 5)}...` : "MISSING");
+  console.log("SHOPEE_PARTNER_KEY:", process.env.SHOPEE_PARTNER_KEY ? 
+    `${process.env.SHOPEE_PARTNER_KEY.substring(0, 10)}...` : "MISSING");
+  console.log("SHOPEE_REDIRECT_URL:", process.env.SHOPEE_REDIRECT_URL || "MISSING");
+  console.log("SHOPEE_USE_MERCHANT:", process.env.SHOPEE_USE_MERCHANT || "false");
+  console.log("SHOPEE_BASE_URL:", process.env.SHOPEE_BASE_URL || "default");
+  console.log("=== END DEBUG ===");
+}
+
+export function shopeeAuthUrl(): string {
+  try {
+    debugEnvVariables();
+    
+    const partnerId = (process.env.SHOPEE_PARTNER_ID || "").trim();
+    const redirect = (process.env.SHOPEE_REDIRECT_URL || "").trim();
+    const partnerKey = (process.env.SHOPEE_PARTNER_KEY || "").trim();
+
+    // Validasi environment variables
+    if (!partnerId) {
+      throw new Error("Missing SHOPEE_PARTNER_ID environment variable");
+    }
+    if (!partnerKey) {
+      throw new Error("Missing SHOPEE_PARTNER_KEY environment variable");
+    }
+    if (!redirect) {
+      throw new Error("Missing SHOPEE_REDIRECT_URL environment variable");
+    }
+
+    const useMerchant = (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
+    const path = useMerchant
+      ? "/api/v2/merchant/auth_partner"
+      : "/api/v2/shop/auth_partner";
+    
+    const timestamp = ts();
+    const signature = generateSignature(partnerKey, partnerId, path, timestamp);
+
+    // Build URL
+    const u = new URL(baseUrl() + path);
+    u.searchParams.set("partner_id", partnerId);
+    u.searchParams.set("timestamp", String(timestamp));
+    u.searchParams.set("sign", signature);
+    u.searchParams.set("redirect", redirect);
+    
+    console.log("✅ Final Auth URL:", u.toString());
+    
+    return u.toString();
+  } catch (error) {
+    console.error("❌ shopeeAuthUrl error:", error);
+    throw error;
+  }
+}
+
+// Fungsi sign lama (untuk API lainnya) - tetap pertahankan
 function sign(
   partnerKey: string,
   path: string,
@@ -66,13 +151,10 @@ function sign(
     throw new Error("Shopee partner key is empty or not set in environment");
   }
 
-  // Try to decode partnerKey as Base64. Some portals prefix the key (eg "shpk...").
-  // If prefix exists, remove it then try Base64.
   let keyBuf: Buffer | null = null;
   const tryBase64 = (s: string) => {
     try {
       const buf = Buffer.from(s, "base64");
-      // Basic validity check: decoded buffer should not be empty
       if (buf.length === 0) throw new Error("decoded base64 length 0");
       return buf;
     } catch {
@@ -80,59 +162,23 @@ function sign(
     }
   };
 
-  // Primary attempt: decode whole key as Base64
   keyBuf = tryBase64(keyRaw);
-
-  // If not valid Base64, check and strip common prefix then try again
   if (!keyBuf) {
-    // common prefix variants: "shpk", "shpk_", etc. we'll remove any leading non-alphanumeric prefix up to first alnum sequence
     const stripped = keyRaw.replace(/^[^A-Za-z0-9]*/, "").replace(/^shpk[_-]?/i, "");
     if (stripped !== keyRaw) {
       keyBuf = tryBase64(stripped);
     }
   }
 
-  // Final fallback: if still no buffer, attempt to use raw string as key (may work if partner gave plain text)
   if (!keyBuf) {
-    // As a last resort, use the raw string as-is (will treat as utf-8 bytes)
-    // Note: this may fail verification if Shopee expects base64-decoded bytes.
     keyBuf = Buffer.from(keyRaw, "utf8");
   }
 
-  // compute HMAC
   const hmac = crypto.createHmac("sha256", keyBuf);
   hmac.update(base);
   const digest = hmac.digest("hex");
 
-  // Safe debug (uncomment while debugging, do NOT log partnerKey itself)
-  // console.log("SHOPEE SIGN DEBUG:", { path: pathStr, timestamp: tsStr, base, computed_sign: digest });
-
   return digest;
-}
-
-export function shopeeAuthUrl() {
-  const partnerId = (process.env.SHOPEE_PARTNER_ID || "").trim();
-  const redirect = (process.env.SHOPEE_REDIRECT_URL || "").trim();
-  const partnerKey = (process.env.SHOPEE_PARTNER_KEY || "").trim();
-
-  if (!partnerId) throw new Error("Missing SHOPEE_PARTNER_ID environment variable");
-  if (!partnerKey) throw new Error("Missing SHOPEE_PARTNER_KEY environment variable");
-  if (!redirect) throw new Error("Missing SHOPEE_REDIRECT_URL environment variable");
-
-  const useMerchant =
-    (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
-  const path = useMerchant
-    ? "/api/v2/merchant/auth_partner"
-    : "/api/v2/shop/auth_partner";
-  const t = ts();
-  const s = sign(partnerKey, path, partnerId, t);
-
-  const u = new URL(baseUrl() + path);
-  u.searchParams.set("partner_id", partnerId);
-  u.searchParams.set("timestamp", String(t));
-  u.searchParams.set("sign", s);
-  u.searchParams.set("redirect", redirect);
-  return u.toString();
 }
 
 async function getAccountOrThrow(id: number) {
