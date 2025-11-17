@@ -6,7 +6,8 @@ import { audit } from "../utils/audit.js";
 import { pushNewProductMock, importTransactionsMock, syncStockMock } from "../services/marketplace-mock.js";
 import { shopeeAuthUrl, shopeeExchangeToken, shopeeGetOrders, shopeeUpdateStock, shopeeRefreshToken } from "../services/shopee.js";
 import { tiktokAuthUrl, tiktokExchangeToken, tiktokSearchOrders, tiktokUpdateInventory, tiktokRefreshToken } from "../services/tiktok.js";
-import type { Platform } from "@prisma/client";
+
+type Platform = "SHOPEE" | "TIKTOK" | "OFFLINE";
 
 const r = Router();
 r.use(authRequired);
