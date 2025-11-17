@@ -28,27 +28,25 @@ function ts() {
   return Math.floor(Date.now() / 1000);
 }
 
-// ✅ FUNCTION BARU UNTUK AUTH SHOPEE
-function generateSignature(partnerKey: string, partnerId: string, path: string, timestamp: number): string {
+// ✅ FUNCTION BARU UNTUK AUTH SHOPEE (auth_partner)
+// Shopee expects: sign = SHA256(partner_id + path + timestamp)
+// NOTE: partnerKey is accepted as param to keep call-sites unchanged, but NOT used here.
+function generateSignature(
+  _partnerKey: string,
+  partnerId: string,
+  path: string,
+  timestamp: number
+): string {
   const baseString = `${partnerId}${path}${timestamp}`;
-  
-  console.log("🔐 Signature Debug:");
-  console.log("Base String:", baseString);
-  console.log("Partner ID:", partnerId);
-  console.log("Path:", path);
-  console.log("Timestamp:", timestamp);
-  console.log("Partner Key Length:", partnerKey.length);
 
-  // Untuk Shopee, biasanya partner key digunakan sebagai plain text
-  const keyBuffer = Buffer.from(partnerKey, 'utf8');
-  console.log("✅ Using plain text key (UTF-8)");
+  // Debug minimal (non-production)
+  if (process.env.NODE_ENV !== "production") {
+    console.log("Shopee auth sign - baseString:", baseString);
+  }
 
-  const hmac = crypto.createHmac('sha256', keyBuffer);
-  hmac.update(baseString);
-  const signature = hmac.digest('hex');
-  
-  console.log("✅ Generated Signature:", signature);
-  return signature;
+  // plain SHA256 (NOT HMAC)
+  const digest = crypto.createHash("sha256").update(baseString).digest("hex");
+  return digest;
 }
 
 /**
@@ -56,12 +54,26 @@ function generateSignature(partnerKey: string, partnerId: string, path: string, 
  */
 function debugEnvVariables() {
   console.log("=== 🛠️ SHOPEE ENV DEBUG ===");
-  console.log("SHOPEE_PARTNER_ID:", process.env.SHOPEE_PARTNER_ID ? 
-    `${process.env.SHOPEE_PARTNER_ID.substring(0, 5)}...` : "MISSING");
-  console.log("SHOPEE_PARTNER_KEY:", process.env.SHOPEE_PARTNER_KEY ? 
-    `${process.env.SHOPEE_PARTNER_KEY.substring(0, 10)}...` : "MISSING");
-  console.log("SHOPEE_REDIRECT_URL:", process.env.SHOPEE_REDIRECT_URL || "MISSING");
-  console.log("SHOPEE_USE_MERCHANT:", process.env.SHOPEE_USE_MERCHANT || "false");
+  console.log(
+    "SHOPEE_PARTNER_ID:",
+    process.env.SHOPEE_PARTNER_ID
+      ? `${process.env.SHOPEE_PARTNER_ID.substring(0, 5)}...`
+      : "MISSING"
+  );
+  console.log(
+    "SHOPEE_PARTNER_KEY:",
+    process.env.SHOPEE_PARTNER_KEY
+      ? `${process.env.SHOPEE_PARTNER_KEY.substring(0, 10)}...`
+      : "MISSING"
+  );
+  console.log(
+    "SHOPEE_REDIRECT_URL:",
+    process.env.SHOPEE_REDIRECT_URL || "MISSING"
+  );
+  console.log(
+    "SHOPEE_USE_MERCHANT:",
+    process.env.SHOPEE_USE_MERCHANT || "false"
+  );
   console.log("SHOPEE_BASE_URL:", process.env.SHOPEE_BASE_URL || "default");
   console.log("=== END DEBUG ===");
 }
@@ -69,7 +81,7 @@ function debugEnvVariables() {
 export function shopeeAuthUrl(): string {
   try {
     debugEnvVariables();
-    
+
     const partnerId = (process.env.SHOPEE_PARTNER_ID || "").trim();
     const redirect = (process.env.SHOPEE_REDIRECT_URL || "").trim();
     const partnerKey = (process.env.SHOPEE_PARTNER_KEY || "").trim();
@@ -85,14 +97,16 @@ export function shopeeAuthUrl(): string {
       throw new Error("Missing SHOPEE_REDIRECT_URL environment variable");
     }
 
-    const useMerchant = (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
+    const useMerchant =
+      (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
     const path = useMerchant
       ? "/api/v2/merchant/auth_partner"
       : "/api/v2/shop/auth_partner";
-    
+
+    // create timestamp once and reuse (important!)
     const timestamp = ts();
-    
-    // ✅ GUNAKAN generateSignature YANG BARU
+
+    // generateSignature menggunakan SHA256 plain (untuk auth_partner)
     const signature = generateSignature(partnerKey, partnerId, path, timestamp);
 
     // Build URL
@@ -101,9 +115,11 @@ export function shopeeAuthUrl(): string {
     u.searchParams.set("timestamp", String(timestamp));
     u.searchParams.set("sign", signature);
     u.searchParams.set("redirect", redirect);
-    
-    console.log("✅ Final Auth URL:", u.toString());
-    
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("✅ Final Auth URL:", u.toString());
+    }
+
     return u.toString();
   } catch (error) {
     console.error("❌ shopeeAuthUrl error:", error);
@@ -151,7 +167,9 @@ function sign(
 
   keyBuf = tryBase64(keyRaw);
   if (!keyBuf) {
-    const stripped = keyRaw.replace(/^[^A-Za-z0-9]*/, "").replace(/^shpk[_-]?/i, "");
+    const stripped = keyRaw
+      .replace(/^[^A-Za-z0-9]*/, "")
+      .replace(/^shpk[_-]?/i, "");
     if (stripped !== keyRaw) {
       keyBuf = tryBase64(stripped);
     }
