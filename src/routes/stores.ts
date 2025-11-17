@@ -304,11 +304,11 @@ router.post("/:id/shopee/connect", async (req, res) => {
 router.get("/debug/shopee-signature-deep-dive", async (req, res) => {
   try {
     const crypto = await import("node:crypto");
-    
+
     const partnerId = process.env.SHOPEE_PARTNER_ID;
     const partnerKey = process.env.SHOPEE_PARTNER_KEY;
     const redirectUrl = process.env.SHOPEE_REDIRECT_URL;
-    
+
     if (!partnerId || !partnerKey || !redirectUrl) {
       return res.status(400).json({ error: "Missing env vars" });
     }
@@ -322,28 +322,30 @@ router.get("/debug/shopee-signature-deep-dive", async (req, res) => {
       {
         name: "standard",
         baseString: `${partnerId}${path}${timestamp}`,
-        description: "partnerId + path + timestamp"
+        description: "partnerId + path + timestamp",
       },
       {
         name: "with_slash",
         baseString: `${partnerId}${path}${timestamp}`,
-        description: "Same as standard"
+        description: "Same as standard",
       },
       {
         name: "with_query",
-        baseString: `${partnerId}${path}${timestamp}${encodeURIComponent(redirectUrl)}`,
-        description: "Includes redirect in base string"
+        baseString: `${partnerId}${path}${timestamp}${encodeURIComponent(
+          redirectUrl
+        )}`,
+        description: "Includes redirect in base string",
       },
       {
-        name: "reverse_order", 
+        name: "reverse_order",
         baseString: `${path}${partnerId}${timestamp}`,
-        description: "path + partnerId + timestamp"
+        description: "path + partnerId + timestamp",
       },
       {
         name: "timestamp_first",
         baseString: `${timestamp}${partnerId}${path}`,
-        description: "timestamp + partnerId + path"
-      }
+        description: "timestamp + partnerId + path",
+      },
     ];
 
     const results = [];
@@ -356,19 +358,21 @@ router.get("/debug/shopee-signature-deep-dive", async (req, res) => {
         hmac.update(testCase.baseString);
         const signature = hmac.digest("hex");
 
-        const testUrl = `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signature}&redirect=${encodeURIComponent(redirectUrl)}`;
-        
+        const testUrl = `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signature}&redirect=${encodeURIComponent(
+          redirectUrl
+        )}`;
+
         results.push({
           name: testCase.name,
           description: testCase.description,
           baseString: testCase.baseString,
           signature,
-          url: testUrl
+          url: testUrl,
         });
       } catch (error) {
         results.push({
           name: testCase.name,
-          error: error.message
+          error: error.message,
         });
       }
     }
@@ -379,18 +383,20 @@ router.get("/debug/shopee-signature-deep-dive", async (req, res) => {
       const hmac = crypto.createHmac("sha256", keyBuffer);
       hmac.update(`${partnerId}${path}${timestamp}`);
       const rawSignature = hmac.digest("hex");
-      
+
       results.push({
         name: "raw_utf8_key",
         description: "Partner key as UTF-8 string (not HEX)",
         baseString: `${partnerId}${path}${timestamp}`,
         signature: rawSignature,
-        url: `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${rawSignature}&redirect=${encodeURIComponent(redirectUrl)}`
+        url: `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${rawSignature}&redirect=${encodeURIComponent(
+          redirectUrl
+        )}`,
       });
     } catch (error) {
       results.push({
         name: "raw_utf8_key",
-        error: error.message
+        error: error.message,
       });
     }
 
@@ -400,11 +406,10 @@ router.get("/debug/shopee-signature-deep-dive", async (req, res) => {
         partnerKeyLength: partnerKey.length,
         normalizedKeyLength: normalizedKey.length,
         redirectUrl,
-        timestamp
+        timestamp,
       },
-      testCases: results
+      testCases: results,
     });
-
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -420,21 +425,21 @@ router.get("/debug/shopee-key-format", async (req, res) => {
 
     // Analysis 1: HEX pattern
     const hexRegex = /^[0-9a-fA-F]+$/;
-    const isHex = hexRegex.test(partnerKey.replace(/^shpk/i, ''));
+    const isHex = hexRegex.test(partnerKey.replace(/^shpk/i, ""));
     analyses.push({
       type: "HEX",
       isValid: isHex,
       length: partnerKey.length,
-      normalized: partnerKey.replace(/^shpk/i, '')
+      normalized: partnerKey.replace(/^shpk/i, ""),
     });
 
     // Analysis 2: Base64 pattern
     const base64Regex = /^[A-Za-z0-9+/]+={0,2}$/;
     const isBase64 = base64Regex.test(partnerKey);
     analyses.push({
-      type: "Base64", 
+      type: "Base64",
       isValid: isBase64,
-      length: partnerKey.length
+      length: partnerKey.length,
     });
 
     // Analysis 3: Raw string
@@ -442,70 +447,147 @@ router.get("/debug/shopee-key-format", async (req, res) => {
       type: "Raw String",
       isValid: true,
       length: partnerKey.length,
-      first10Chars: partnerKey.substring(0, 10)
+      first10Chars: partnerKey.substring(0, 10),
     });
 
     // Test different decoding methods
     const decodingTests = [];
-    
+
     try {
-      const hexBuffer = Buffer.from(partnerKey.replace(/^shpk/i, ''), 'hex');
+      const hexBuffer = Buffer.from(partnerKey.replace(/^shpk/i, ""), "hex");
       decodingTests.push({
         method: "HEX",
         success: true,
         bufferLength: hexBuffer.length,
-        buffer: hexBuffer.toString('base64')
+        buffer: hexBuffer.toString("base64"),
       });
     } catch (e) {
       decodingTests.push({
-        method: "HEX", 
+        method: "HEX",
         success: false,
-        error: e.message
+        error: e.message,
       });
     }
 
     try {
-      const base64Buffer = Buffer.from(partnerKey, 'base64');
+      const base64Buffer = Buffer.from(partnerKey, "base64");
       decodingTests.push({
         method: "Base64",
-        success: true, 
+        success: true,
         bufferLength: base64Buffer.length,
-        buffer: base64Buffer.toString('hex')
+        buffer: base64Buffer.toString("hex"),
       });
     } catch (e) {
       decodingTests.push({
         method: "Base64",
         success: false,
-        error: e.message
+        error: e.message,
       });
     }
 
     try {
-      const utf8Buffer = Buffer.from(partnerKey, 'utf8');
+      const utf8Buffer = Buffer.from(partnerKey, "utf8");
       decodingTests.push({
         method: "UTF8",
         success: true,
         bufferLength: utf8Buffer.length,
-        buffer: utf8Buffer.toString('hex')
+        buffer: utf8Buffer.toString("hex"),
       });
     } catch (e) {
       decodingTests.push({
         method: "UTF8",
         success: false,
-        error: e.message
+        error: e.message,
       });
     }
 
     res.json({
-      originalKey: partnerKey.substring(0, 8) + '...',
+      originalKey: partnerKey.substring(0, 8) + "...",
       originalLength: partnerKey.length,
       analyses,
-      decodingTests
+      decodingTests,
     });
-
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
+// Di routes/stores.ts - endpoint untuk verify environment
+router.get("/debug/verify-shopee-env", async (req, res) => {
+  try {
+    const crypto = await import("node:crypto");
 
+    // Ambil dari environment
+    const partnerId = process.env.SHOPEE_PARTNER_ID;
+    const partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const redirectUrl = process.env.SHOPEE_REDIRECT_URL;
+    const baseUrl = process.env.SHOPEE_BASE_URL;
+
+    console.log("🔍 Environment Variables:", {
+      partnerId: partnerId ? `${partnerId.substring(0, 6)}...` : "MISSING",
+      partnerKey: partnerKey ? `${partnerKey.substring(0, 12)}...` : "MISSING",
+      redirectUrl: redirectUrl || "MISSING",
+      baseUrl: baseUrl || "MISSING",
+    });
+
+    if (!partnerId || !partnerKey || !redirectUrl) {
+      return res.status(400).json({
+        error: "Missing environment variables",
+        partnerId: !!partnerId,
+        partnerKey: !!partnerKey,
+        redirectUrl: !!redirectUrl,
+      });
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const path = "/api/v2/shop/auth_partner";
+
+    // Process key
+    let normalizedKey = partnerKey;
+    if (partnerKey.toLowerCase().startsWith("shpk")) {
+      normalizedKey = partnerKey.substring(4);
+    }
+    normalizedKey = normalizedKey.trim();
+
+    if (normalizedKey.length % 2 !== 0) {
+      normalizedKey = "0" + normalizedKey;
+    }
+
+    const baseString = `${partnerId}${path}${timestamp}`;
+    const keyBuffer = Buffer.from(normalizedKey, "hex");
+    const hmac = crypto.createHmac("sha256", keyBuffer);
+    hmac.update(baseString);
+    const signature = hmac.digest("hex");
+
+    const authUrl = `${
+      baseUrl || "https://partner.test-stable.shopeemobile.com"
+    }${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signature}&redirect=${encodeURIComponent(
+      redirectUrl
+    )}`;
+
+    res.json({
+      success: true,
+      environment: {
+        partnerId,
+        partnerKeyPrefix: partnerKey.substring(0, 8),
+        partnerKeyLength: partnerKey.length,
+        normalizedKeyLength: normalizedKey.length,
+        redirectUrl,
+        baseUrl: baseUrl || "default",
+      },
+      signature: {
+        timestamp,
+        baseString,
+        signature,
+        keyBufferLength: keyBuffer.length,
+      },
+      authUrl,
+    });
+  } catch (error: any) {
+    console.error("Verify env error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
 export default router;
