@@ -37,6 +37,7 @@ function ts() {
  * Berdasarkan key format kamu (HEX) -> gunakan decode HEX -> HMAC.
  */
 // Di services/shopee.ts
+// Di services/shopee.ts - perbaiki generateSignature
 function generateSignature(
   partnerKey: string,
   partnerId: string,
@@ -47,57 +48,45 @@ function generateSignature(
     `🔐 Generating signature for partnerId: ${partnerId}, path: ${path}, timestamp: ${timestamp}`
   );
 
-  // Coba multiple methods
-  const methods = [
-    {
-      name: "hex_with_shpk_removal",
-      key: partnerKey.replace(/^shpk/i, "").trim(),
-      encoding: "hex" as BufferEncoding,
-    },
-    {
-      name: "hex_original",
-      key: partnerKey,
-      encoding: "hex" as BufferEncoding,
-    },
-    {
-      name: "utf8_raw",
-      key: partnerKey,
-      encoding: "utf8" as BufferEncoding,
-    },
-    {
-      name: "utf8_with_shpk_removal",
-      key: partnerKey.replace(/^shpk/i, "").trim(),
-      encoding: "utf8" as BufferEncoding,
-    },
-  ];
+  // Normalize partner key - remove shpk prefix dan handle odd length
+  let normalizedKey = partnerKey.replace(/^shpk/i, "").trim();
 
-  const baseString = `${partnerId}${path}${timestamp}`;
-  console.log(`📝 Base string: ${baseString}`);
-
-  for (const method of methods) {
-    try {
-      const keyBuffer = Buffer.from(method.key, method.encoding);
-      const hmac = crypto.createHmac("sha256", keyBuffer);
-      hmac.update(baseString);
-      const signature = hmac.digest("hex");
-
-      console.log(
-        `🔑 Method ${method.name}: ${signature} (key: ${method.key.substring(
-          0,
-          8
-        )}..., encoding: ${method.encoding})`
-      );
-
-      // Untuk testing, return method pertama yang biasa digunakan
-      if (method.name === "hex_with_shpk_removal") {
-        return signature;
-      }
-    } catch (error) {
-      console.log(`❌ Method ${method.name} failed:`, error.message);
-    }
+  // Jika length ganjil, tambahkan '0' di depan
+  if (normalizedKey.length % 2 !== 0) {
+    normalizedKey = "0" + normalizedKey;
+    console.log(`🔧 Fixed odd key length: ${normalizedKey.length} chars`);
   }
 
-  throw new Error("All signature methods failed");
+  console.log(`🔑 Normalized key: ${normalizedKey.substring(0, 16)}...`);
+
+  const baseString = `${partnerId}${path}${timestamp}`;
+  console.log(`📝 Base string: "${baseString}"`);
+  console.log(`📝 Base string length: ${baseString.length}`);
+
+  try {
+    // Coba sebagai HEX
+    const keyBuffer = Buffer.from(normalizedKey, "hex");
+    console.log(`🔑 Key buffer length: ${keyBuffer.length} bytes`);
+
+    const hmac = crypto.createHmac("sha256", keyBuffer);
+    hmac.update(baseString);
+    const signature = hmac.digest("hex");
+
+    console.log(`✅ Generated signature: ${signature}`);
+    return signature;
+  } catch (error) {
+    console.error(`❌ HEX method failed:`, error.message);
+
+    // Fallback: coba sebagai raw string
+    console.log(`🔄 Trying UTF-8 fallback...`);
+    const keyBuffer = Buffer.from(partnerKey, "utf8");
+    const hmac = crypto.createHmac("sha256", keyBuffer);
+    hmac.update(baseString);
+    const signature = hmac.digest("hex");
+
+    console.log(`✅ Fallback signature: ${signature}`);
+    return signature;
+  }
 }
 
 /**

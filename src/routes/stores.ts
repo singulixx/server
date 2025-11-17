@@ -97,6 +97,47 @@ router.get("/debug/shopee-auth-full", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Di routes/stores.ts atau routes/channels.ts
+router.get("/debug/shopee-test-redirect", async (req, res) => {
+  try {
+    const crypto = await import("node:crypto");
+
+    const partnerId = process.env.SHOPEE_PARTNER_ID;
+    let partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const redirectUrl = process.env.SHOPEE_REDIRECT_URL;
+
+    if (!partnerId || !partnerKey || !redirectUrl) {
+      return res.status(400).json({ error: "Missing env vars" });
+    }
+
+    // Fix partner key length jika ganjil
+    let normalizedKey = partnerKey.replace(/^shpk/i, "").trim();
+    if (normalizedKey.length % 2 !== 0) {
+      normalizedKey = "0" + normalizedKey;
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const path = "/api/v2/shop/auth_partner";
+    const baseString = `${partnerId}${path}${timestamp}`;
+
+    const keyBuffer = Buffer.from(normalizedKey, "hex");
+    const hmac = crypto.createHmac("sha256", keyBuffer);
+    hmac.update(baseString);
+    const signature = hmac.digest("hex");
+
+    const baseUrl =
+      process.env.SHOPEE_BASE_URL ||
+      "https://partner.test-stable.shopeemobile.com";
+    const authUrl = `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signature}&redirect=${encodeURIComponent(
+      redirectUrl
+    )}`;
+
+    // Redirect langsung ke Shopee
+    res.redirect(authUrl);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 router.get("/", async (req, res) => {
   const { limit, offset, skip } = req.query as any;
