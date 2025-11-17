@@ -11,76 +11,37 @@ router.use(authRequired);
 // ✅ ROUTE DEBUG YANG DIPERBAIKI (tanpa import crypto langsung)
 router.get("/debug/shopee-sign", async (req, res) => {
   try {
-    // Gunakan dynamic import untuk crypto (Node.js style)
     const crypto = await import("node:crypto");
 
     const partnerId = process.env.SHOPEE_PARTNER_ID;
     const partnerKey = process.env.SHOPEE_PARTNER_KEY;
-    const timestamp = 1763029593;
-    const path = "/api/v2/shop/auth_partner";
 
     if (!partnerId || !partnerKey) {
       return res.status(400).json({
         error: "Missing environment variables",
-        SHOPEE_PARTNER_ID: !!partnerId,
-        SHOPEE_PARTNER_KEY: !!partnerKey,
       });
     }
 
+    const timestamp = Math.floor(Date.now() / 1000);
+    const path = "/api/v2/shop/auth_partner";
+
     const baseString = `${partnerId}${path}${timestamp}`;
 
-    console.log("🔐 Debug Info:", {
-      partnerId,
-      timestamp,
-      path,
-      baseString,
-      keyLength: partnerKey.length,
-      keyPreview: partnerKey.substring(0, 10) + "...",
-    });
-
-    // Coba decode sebagai base64
-    let keyBuffer: Buffer;
-    let keyType = "plain";
-    try {
-      keyBuffer = Buffer.from(partnerKey, "base64");
-      keyType = "base64";
-    } catch (e) {
-      keyBuffer = Buffer.from(partnerKey, "utf8");
-      keyType = "plain";
-    }
+    // ALWAYS UTF-8 !!!
+    const keyBuffer = Buffer.from(partnerKey, "utf8");
 
     const hmac = crypto.createHmac("sha256", keyBuffer);
     hmac.update(baseString);
     const signature = hmac.digest("hex");
 
-    const result = {
+    res.json({
       partnerId,
       timestamp,
       baseString,
       generatedSignature: signature,
-      expectedSignature:
-        "04353338bc2bea20a8d5b6094f430592a3f3745ca72f44888f6099ae988cd5f3",
-      match:
-        signature ===
-        "04353338bc2bea20a8d5b6094f430592a3f3745ca72f44888f6099ae988cd5f3",
-      keyLength: partnerKey.length,
-      keyType: keyType,
-      environment: "vercel",
-      message:
-        signature ===
-        "04353338bc2bea20a8d5b6094f430592a3f3745ca72f44888f6099ae988cd5f3"
-          ? "✅ SIGNATURE MATCH!"
-          : "❌ SIGNATURE MISMATCH!",
-    };
-
-    console.log("🔐 Debug Result:", result);
-    res.json(result);
-  } catch (error: any) {
-    console.error("❌ Debug Error:", error);
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack,
     });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
