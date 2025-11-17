@@ -97,43 +97,100 @@ router.get("/debug/shopee-auth-full", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// Di routes/stores.ts atau routes/channels.ts
-router.get("/debug/shopee-test-redirect", async (req, res) => {
+
+// GANTI endpoint debug dengan yang lebih comprehensive
+router.get("/debug/shopee-auth-comprehensive", async (req, res) => {
   try {
     const crypto = await import("node:crypto");
 
     const partnerId = process.env.SHOPEE_PARTNER_ID;
-    let partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const partnerKey = process.env.SHOPEE_PARTNER_KEY;
     const redirectUrl = process.env.SHOPEE_REDIRECT_URL;
 
     if (!partnerId || !partnerKey || !redirectUrl) {
-      return res.status(400).json({ error: "Missing env vars" });
-    }
-
-    // Fix partner key length jika ganjil
-    let normalizedKey = partnerKey.replace(/^shpk/i, "").trim();
-    if (normalizedKey.length % 2 !== 0) {
-      normalizedKey = "0" + normalizedKey;
+      return res.status(400).json({
+        error: "Missing environment variables",
+        partnerId: !!partnerId,
+        partnerKey: !!partnerKey,
+        redirectUrl: !!redirectUrl,
+      });
     }
 
     const timestamp = Math.floor(Date.now() / 1000);
     const path = "/api/v2/shop/auth_partner";
-    const baseString = `${partnerId}${path}${timestamp}`;
-
-    const keyBuffer = Buffer.from(normalizedKey, "hex");
-    const hmac = crypto.createHmac("sha256", keyBuffer);
-    hmac.update(baseString);
-    const signature = hmac.digest("hex");
-
     const baseUrl =
       process.env.SHOPEE_BASE_URL ||
       "https://partner.test-stable.shopeemobile.com";
-    const authUrl = `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signature}&redirect=${encodeURIComponent(
-      redirectUrl
-    )}`;
 
-    // Redirect langsung ke Shopee
-    res.redirect(authUrl);
+    // Test multiple signature methods
+    const methods = [];
+
+    // Method 1: HEX dengan length fix
+    let normalized1 = partnerKey.replace(/^shpk/i, "").trim();
+    if (normalized1.length % 2 !== 0) normalized1 = "0" + normalized1;
+    const keyBuffer1 = Buffer.from(normalized1, "hex");
+    const hmac1 = crypto.createHmac("sha256", keyBuffer1);
+    hmac1.update(`${partnerId}${path}${timestamp}`);
+    const sig1 = hmac1.digest("hex");
+    methods.push({
+      name: "hex_fixed_length",
+      signature: sig1,
+      url: `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sig1}&redirect=${encodeURIComponent(
+        redirectUrl
+      )}`,
+    });
+
+    // Method 2: HEX tanpa fix length
+    const normalized2 = partnerKey.replace(/^shpk/i, "").trim();
+    const keyBuffer2 = Buffer.from(normalized2, "hex");
+    const hmac2 = crypto.createHmac("sha256", keyBuffer2);
+    hmac2.update(`${partnerId}${path}${timestamp}`);
+    const sig2 = hmac2.digest("hex");
+    methods.push({
+      name: "hex_original",
+      signature: sig2,
+      url: `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sig2}&redirect=${encodeURIComponent(
+        redirectUrl
+      )}`,
+    });
+
+    // Method 3: UTF-8 raw
+    const keyBuffer3 = Buffer.from(partnerKey, "utf8");
+    const hmac3 = crypto.createHmac("sha256", keyBuffer3);
+    hmac3.update(`${partnerId}${path}${timestamp}`);
+    const sig3 = hmac3.digest("hex");
+    methods.push({
+      name: "utf8_raw",
+      signature: sig3,
+      url: `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sig3}&redirect=${encodeURIComponent(
+        redirectUrl
+      )}`,
+    });
+
+    // Method 4: Dengan base64 (jarang digunakan, tapi coba saja)
+    const keyBuffer4 = Buffer.from(partnerKey, "base64");
+    const hmac4 = crypto.createHmac("sha256", keyBuffer4);
+    hmac4.update(`${partnerId}${path}${timestamp}`);
+    const sig4 = hmac4.digest("hex");
+    methods.push({
+      name: "base64",
+      signature: sig4,
+      url: `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sig4}&redirect=${encodeURIComponent(
+        redirectUrl
+      )}`,
+    });
+
+    res.json({
+      debug: {
+        partnerId,
+        partnerKeyLength: partnerKey.length,
+        normalizedKeyLength: normalized1.length,
+        timestamp,
+        path,
+        baseString: `${partnerId}${path}${timestamp}`,
+      },
+      methods,
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

@@ -38,53 +38,76 @@ function ts() {
  */
 // Di services/shopee.ts
 // Di services/shopee.ts - perbaiki generateSignature
+// Di services/shopee.ts - GANTI TOTAL function generateSignature
 function generateSignature(
   partnerKey: string,
   partnerId: string,
   path: string,
   timestamp: number
 ): string {
+  console.log(`🔐 SIGNATURE DEBUG START ==================`);
   console.log(
-    `🔐 Generating signature for partnerId: ${partnerId}, path: ${path}, timestamp: ${timestamp}`
+    `📋 Input: partnerId=${partnerId}, path=${path}, timestamp=${timestamp}`
   );
 
-  // Normalize partner key - remove shpk prefix dan handle odd length
+  // Normalize partner key
   let normalizedKey = partnerKey.replace(/^shpk/i, "").trim();
+  console.log(
+    `🔑 Original key: ${partnerKey.substring(0, 8)}... (length: ${
+      partnerKey.length
+    })`
+  );
+  console.log(
+    `🔑 Normalized key: ${normalizedKey.substring(0, 8)}... (length: ${
+      normalizedKey.length
+    })`
+  );
 
-  // Jika length ganjil, tambahkan '0' di depan
+  // Fix odd length - TAMBAH '0' di DEPAN jika length ganjil
   if (normalizedKey.length % 2 !== 0) {
     normalizedKey = "0" + normalizedKey;
-    console.log(`🔧 Fixed odd key length: ${normalizedKey.length} chars`);
+    console.log(
+      `🔧 Fixed odd length: ${normalizedKey.substring(0, 8)}... (new length: ${
+        normalizedKey.length
+      })`
+    );
   }
 
-  console.log(`🔑 Normalized key: ${normalizedKey.substring(0, 16)}...`);
+  // Base string - PASTIKAN TIDAK ADA SLASH di AWAL path
+  const cleanPath = path.startsWith("/") ? path : "/" + path;
+  const baseString = `${partnerId}${cleanPath}${timestamp}`;
 
-  const baseString = `${partnerId}${path}${timestamp}`;
   console.log(`📝 Base string: "${baseString}"`);
-  console.log(`📝 Base string length: ${baseString.length}`);
+  console.log(`📝 Base string bytes:`, Buffer.from(baseString, "utf8"));
 
   try {
-    // Coba sebagai HEX
+    // Method 1: HEX decoding dengan key yang sudah di-fix
+    console.log(`🔄 Trying HEX method with fixed key...`);
     const keyBuffer = Buffer.from(normalizedKey, "hex");
+    console.log(`🔑 Key buffer:`, keyBuffer);
     console.log(`🔑 Key buffer length: ${keyBuffer.length} bytes`);
 
     const hmac = crypto.createHmac("sha256", keyBuffer);
-    hmac.update(baseString);
+    hmac.update(baseString, "utf8");
     const signature = hmac.digest("hex");
 
-    console.log(`✅ Generated signature: ${signature}`);
+    console.log(`✅ HEX Signature: ${signature}`);
+    console.log(`🔐 SIGNATURE DEBUG END ==================`);
+
     return signature;
   } catch (error) {
     console.error(`❌ HEX method failed:`, error.message);
 
-    // Fallback: coba sebagai raw string
-    console.log(`🔄 Trying UTF-8 fallback...`);
+    // Fallback ke raw string
+    console.log(`🔄 Falling back to RAW string method...`);
     const keyBuffer = Buffer.from(partnerKey, "utf8");
     const hmac = crypto.createHmac("sha256", keyBuffer);
-    hmac.update(baseString);
+    hmac.update(baseString, "utf8");
     const signature = hmac.digest("hex");
 
-    console.log(`✅ Fallback signature: ${signature}`);
+    console.log(`✅ RAW Signature: ${signature}`);
+    console.log(`🔐 SIGNATURE DEBUG END ==================`);
+
     return signature;
   }
 }
