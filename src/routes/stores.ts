@@ -300,4 +300,212 @@ router.post("/:id/shopee/connect", async (req, res) => {
   }
 });
 
+// Tambahkan di routes/stores.ts
+router.get("/debug/shopee-signature-deep-dive", async (req, res) => {
+  try {
+    const crypto = await import("node:crypto");
+    
+    const partnerId = process.env.SHOPEE_PARTNER_ID;
+    const partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const redirectUrl = process.env.SHOPEE_REDIRECT_URL;
+    
+    if (!partnerId || !partnerKey || !redirectUrl) {
+      return res.status(400).json({ error: "Missing env vars" });
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const path = "/api/v2/shop/auth_partner";
+    const baseUrl = "https://partner.test-stable.shopeemobile.com";
+
+    // Test berbagai kemungkinan base string format
+    const testCases = [
+      {
+        name: "standard",
+        baseString: `${partnerId}${path}${timestamp}`,
+        description: "partnerId + path + timestamp"
+      },
+      {
+        name: "with_slash",
+        baseString: `${partnerId}${path}${timestamp}`,
+        description: "Same as standard"
+      },
+      {
+        name: "with_query",
+        baseString: `${partnerId}${path}${timestamp}${encodeURIComponent(redirectUrl)}`,
+        description: "Includes redirect in base string"
+      },
+      {
+        name: "reverse_order", 
+        baseString: `${path}${partnerId}${timestamp}`,
+        description: "path + partnerId + timestamp"
+      },
+      {
+        name: "timestamp_first",
+        baseString: `${timestamp}${partnerId}${path}`,
+        description: "timestamp + partnerId + path"
+      }
+    ];
+
+    const results = [];
+    const normalizedKey = partnerKey.replace(/^shpk/i, "").trim();
+
+    for (const testCase of testCases) {
+      try {
+        const keyBuffer = Buffer.from(normalizedKey, "hex");
+        const hmac = crypto.createHmac("sha256", keyBuffer);
+        hmac.update(testCase.baseString);
+        const signature = hmac.digest("hex");
+
+        const testUrl = `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signature}&redirect=${encodeURIComponent(redirectUrl)}`;
+        
+        results.push({
+          name: testCase.name,
+          description: testCase.description,
+          baseString: testCase.baseString,
+          signature,
+          url: testUrl
+        });
+      } catch (error) {
+        results.push({
+          name: testCase.name,
+          error: error.message
+        });
+      }
+    }
+
+    // Juga test dengan partner key sebagai raw string (bukan HEX)
+    try {
+      const keyBuffer = Buffer.from(partnerKey, "utf8");
+      const hmac = crypto.createHmac("sha256", keyBuffer);
+      hmac.update(`${partnerId}${path}${timestamp}`);
+      const rawSignature = hmac.digest("hex");
+      
+      results.push({
+        name: "raw_utf8_key",
+        description: "Partner key as UTF-8 string (not HEX)",
+        baseString: `${partnerId}${path}${timestamp}`,
+        signature: rawSignature,
+        url: `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${rawSignature}&redirect=${encodeURIComponent(redirectUrl)}`
+      });
+    } catch (error) {
+      results.push({
+        name: "raw_utf8_key",
+        error: error.message
+      });
+    }
+
+    res.json({
+      environment: {
+        partnerId,
+        partnerKeyLength: partnerKey.length,
+        normalizedKeyLength: normalizedKey.length,
+        redirectUrl,
+        timestamp
+      },
+      testCases: results
+    });
+
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+router.get("/debug/shopee-key-format", async (req, res) => {
+  try {
+    const partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    if (!partnerKey) {
+      return res.status(400).json({ error: "No partner key" });
+    }
+
+    const analyses = [];
+
+    // Analysis 1: HEX pattern
+    const hexRegex = /^[0-9a-fA-F]+$/;
+    const isHex = hexRegex.test(partnerKey.replace(/^shpk/i, ''));
+    analyses.push({
+      type: "HEX",
+      isValid: isHex,
+      length: partnerKey.length,
+      normalized: partnerKey.replace(/^shpk/i, '')
+    });
+
+    // Analysis 2: Base64 pattern
+    const base64Regex = /^[A-Za-z0-9+/]+={0,2}$/;
+    const isBase64 = base64Regex.test(partnerKey);
+    analyses.push({
+      type: "Base64", 
+      isValid: isBase64,
+      length: partnerKey.length
+    });
+
+    // Analysis 3: Raw string
+    analyses.push({
+      type: "Raw String",
+      isValid: true,
+      length: partnerKey.length,
+      first10Chars: partnerKey.substring(0, 10)
+    });
+
+    // Test different decoding methods
+    const decodingTests = [];
+    
+    try {
+      const hexBuffer = Buffer.from(partnerKey.replace(/^shpk/i, ''), 'hex');
+      decodingTests.push({
+        method: "HEX",
+        success: true,
+        bufferLength: hexBuffer.length,
+        buffer: hexBuffer.toString('base64')
+      });
+    } catch (e) {
+      decodingTests.push({
+        method: "HEX", 
+        success: false,
+        error: e.message
+      });
+    }
+
+    try {
+      const base64Buffer = Buffer.from(partnerKey, 'base64');
+      decodingTests.push({
+        method: "Base64",
+        success: true, 
+        bufferLength: base64Buffer.length,
+        buffer: base64Buffer.toString('hex')
+      });
+    } catch (e) {
+      decodingTests.push({
+        method: "Base64",
+        success: false,
+        error: e.message
+      });
+    }
+
+    try {
+      const utf8Buffer = Buffer.from(partnerKey, 'utf8');
+      decodingTests.push({
+        method: "UTF8",
+        success: true,
+        bufferLength: utf8Buffer.length,
+        buffer: utf8Buffer.toString('hex')
+      });
+    } catch (e) {
+      decodingTests.push({
+        method: "UTF8",
+        success: false,
+        error: e.message
+      });
+    }
+
+    res.json({
+      originalKey: partnerKey.substring(0, 8) + '...',
+      originalLength: partnerKey.length,
+      analyses,
+      decodingTests
+    });
+
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
