@@ -1,57 +1,78 @@
-import crypto from "crypto";
+// server/src/services/shopee.ts
 import axios from "axios";
 
-const SHOPEE_PARTNER_ID = Number(process.env.SHOPEE_PARTNER_ID);
-const SHOPEE_PARTNER_KEY = process.env.SHOPEE_PARTNER_KEY as string;
-const SHOPEE_REDIRECT_URL = process.env.SHOPEE_REDIRECT_URL as string;
-
-const SHOPEE_HOST =
-  process.env.SHOPEE_ENV === "production"
-    ? "https://partner.shopeemobile.com"
-    : "https://partner.test-stable.shopeemobile.com";
-
 export class ShopeeService {
-  static generateSignature(path: string, timestamp: number, partnerId: number) {
-    const baseString = `${partnerId}${path}${timestamp}`;
+  private static partnerId = Number(process.env.SHOPEE_PARTNER_ID);
+  private static partnerKey = process.env.SHOPEE_PARTNER_KEY!;
+  private static redirectUrl = process.env.SHOPEE_REDIRECT_URL!;
+  private static apiUrl = "https://partner.shopeemobile.com/api/v2";
 
-    return crypto
-      .createHmac("sha256", SHOPEE_PARTNER_KEY)
-      .update(baseString)
-      .digest("hex");
-  }
-
-  static generateAuthUrl() {
-    const timestamp = Math.floor(Date.now() / 1000);
-    const path = "/api/v2/shop/auth_partner";
-
-    const sign = ShopeeService.generateSignature(
-      path,
-      timestamp,
-      SHOPEE_PARTNER_ID
+  // Generate OAuth URL
+  static generateAuthUrl(shopId: string | number): string {
+    return (
+      `https://partner.shopeemobile.com/api/v2/shop/auth_partner` +
+      `?partner_id=${this.partnerId}` +
+      `&redirect=${encodeURIComponent(this.redirectUrl)}` +
+      `&shop_id=${shopId}`
     );
-
-    const redirect = encodeURIComponent(SHOPEE_REDIRECT_URL);
-
-    return `${SHOPEE_HOST}${path}?partner_id=${SHOPEE_PARTNER_ID}&timestamp=${timestamp}&sign=${sign}&redirect=${redirect}`;
   }
 
-  static async getAccessToken(code: string, shopId: number) {
-    const timestamp = Math.floor(Date.now() / 1000);
-    const path = "/api/v2/auth/token/get";
+  // Exchange code → Access Token
+  static async getAccessToken(code: string, shopId: string) {
+    const url = `${this.apiUrl}/auth/token/get`;
 
-    const baseString = `${SHOPEE_PARTNER_ID}${path}${timestamp}${code}${shopId}`;
-
-    const sign = crypto
-      .createHmac("sha256", SHOPEE_PARTNER_KEY)
-      .update(baseString)
-      .digest("hex");
-
-    const response = await axios.post(`${SHOPEE_HOST}${path}`, {
-      partner_id: SHOPEE_PARTNER_ID,
+    const response = await axios.post(url, {
       code,
-      shop_id: shopId,
-      timestamp,
-      sign,
+      shop_id: Number(shopId),
+      partner_id: this.partnerId
+    });
+
+    return response.data;
+  }
+
+  // Refresh token
+  static async refreshToken(refreshToken: string, shopId: string | number) {
+    const url = `${this.apiUrl}/auth/token/refresh`;
+
+    const response = await axios.post(url, {
+      refresh_token: refreshToken,
+      shop_id: Number(shopId),
+      partner_id: this.partnerId
+    });
+
+    return response.data;
+  }
+
+  // Get orders
+  static async getOrders(accessToken: string, shopId: string | number) {
+    const url = `${this.apiUrl}/order/get_order_list`;
+
+    const response = await axios.get(url, {
+      params: {
+        shop_id: Number(shopId),
+        partner_id: this.partnerId,
+        access_token: accessToken
+      }
+    });
+
+    return response.data;
+  }
+
+  // Update stock
+  static async updateStock(
+    accessToken: string,
+    shopId: string | number,
+    itemId: number,
+    stock: number
+  ) {
+    const url = `${this.apiUrl}/product/stock/update`;
+
+    const response = await axios.post(url, {
+      shop_id: Number(shopId),
+      partner_id: this.partnerId,
+      access_token: accessToken,
+      item_id: itemId,
+      stock
     });
 
     return response.data;
