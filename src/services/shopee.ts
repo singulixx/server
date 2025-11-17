@@ -28,42 +28,123 @@ function ts() {
   return Math.floor(Date.now() / 1000);
 }
 
-// ✅ FUNCTION BARU UNTUK AUTH SHOPEE (auth_partner)
-// Shopee expects: sign = SHA256(partner_id + path + timestamp)
-// NOTE: partnerKey is accepted as param to keep call-sites unchanged, but NOT used here.
+/**
+ * generateSignature untuk auth_partner & auth redirect.
+ * Kode ini menormalisasi partnerKey (hapus prefix shpk if any),
+ * mendecode dari HEX ke raw bytes, lalu memakai HMAC-SHA256.
+ *
+ * NOTE: beberapa dokumentasi membingungkan (plain SHA256 vs HMAC).
+ * Berdasarkan key format kamu (HEX) -> gunakan decode HEX -> HMAC.
+ */
+// Di services/shopee.ts
 function generateSignature(
-  _partnerKey: string,
+  partnerKey: string,
   partnerId: string,
   path: string,
   timestamp: number
 ): string {
-  const baseString = `${partnerId}${path}${timestamp}`;
+  console.log(
+    `🔐 Generating signature for partnerId: ${partnerId}, path: ${path}, timestamp: ${timestamp}`
+  );
 
-  // Debug minimal (non-production)
-  if (process.env.NODE_ENV !== "production") {
-    console.log("Shopee auth sign - baseString:", baseString);
+  // Coba multiple methods
+  const methods = [
+    {
+      name: "hex_with_shpk_removal",
+      key: partnerKey.replace(/^shpk/i, "").trim(),
+      encoding: "hex" as BufferEncoding,
+    },
+    {
+      name: "hex_original",
+      key: partnerKey,
+      encoding: "hex" as BufferEncoding,
+    },
+    {
+      name: "utf8_raw",
+      key: partnerKey,
+      encoding: "utf8" as BufferEncoding,
+    },
+    {
+      name: "utf8_with_shpk_removal",
+      key: partnerKey.replace(/^shpk/i, "").trim(),
+      encoding: "utf8" as BufferEncoding,
+    },
+  ];
+
+  const baseString = `${partnerId}${path}${timestamp}`;
+  console.log(`📝 Base string: ${baseString}`);
+
+  for (const method of methods) {
+    try {
+      const keyBuffer = Buffer.from(method.key, method.encoding);
+      const hmac = crypto.createHmac("sha256", keyBuffer);
+      hmac.update(baseString);
+      const signature = hmac.digest("hex");
+
+      console.log(
+        `🔑 Method ${method.name}: ${signature} (key: ${method.key.substring(
+          0,
+          8
+        )}..., encoding: ${method.encoding})`
+      );
+
+      // Untuk testing, return method pertama yang biasa digunakan
+      if (method.name === "hex_with_shpk_removal") {
+        return signature;
+      }
+    } catch (error) {
+      console.log(`❌ Method ${method.name} failed:`, error.message);
+    }
   }
 
-  // plain SHA256 (NOT HMAC)
-  const digest = crypto.createHash("sha256").update(baseString).digest("hex");
-  return digest;
+  throw new Error("All signature methods failed");
 }
 
 /**
- * Debug function untuk memeriksa environment variables
+ * sign() for other Shopee endpoints (token, orders, product, etc).
+ * Also expects partnerKey in HEX (prefixed with shpk optional).
  */
+function sign(
+  partnerKey: string,
+  path: string,
+  partnerId: string,
+  timestamp: number,
+  accessToken?: string | null,
+  shopOrMerchantId?: string | number | null
+) {
+  const partnerIdStr = String(partnerId).trim();
+  const pathStr = String(path).trim();
+  const tsStr = String(timestamp);
+
+  const base =
+    partnerIdStr +
+    pathStr +
+    tsStr +
+    (accessToken || "") +
+    (shopOrMerchantId != null ? String(shopOrMerchantId) : "");
+
+  const normalized = (partnerKey || "").replace(/^shpk/i, "").trim();
+  if (!normalized) throw new Error("Empty SHOPEE_PARTNER_KEY");
+
+  const keyBuf = Buffer.from(normalized, "hex");
+  const hmac = crypto.createHmac("sha256", keyBuf);
+  hmac.update(base);
+  return hmac.digest("hex");
+}
+
 function debugEnvVariables() {
+  if (process.env.NODE_ENV === "production") return;
   console.log("=== 🛠️ SHOPEE ENV DEBUG ===");
   console.log(
     "SHOPEE_PARTNER_ID:",
     process.env.SHOPEE_PARTNER_ID
-      ? `${process.env.SHOPEE_PARTNER_ID.substring(0, 5)}...`
+      ? `${process.env.SHOPEE_PARTNER_ID.substring(0, 6)}...`
       : "MISSING"
   );
   console.log(
     "SHOPEE_PARTNER_KEY:",
     process.env.SHOPEE_PARTNER_KEY
-      ? `${process.env.SHOPEE_PARTNER_KEY.substring(0, 10)}...`
+      ? `${process.env.SHOPEE_PARTNER_KEY.substring(0, 12)}...`
       : "MISSING"
   );
   console.log(
@@ -86,16 +167,12 @@ export function shopeeAuthUrl(): string {
     const redirect = (process.env.SHOPEE_REDIRECT_URL || "").trim();
     const partnerKey = (process.env.SHOPEE_PARTNER_KEY || "").trim();
 
-    // Validasi environment variables
-    if (!partnerId) {
+    if (!partnerId)
       throw new Error("Missing SHOPEE_PARTNER_ID environment variable");
-    }
-    if (!partnerKey) {
+    if (!partnerKey)
       throw new Error("Missing SHOPEE_PARTNER_KEY environment variable");
-    }
-    if (!redirect) {
+    if (!redirect)
       throw new Error("Missing SHOPEE_REDIRECT_URL environment variable");
-    }
 
     const useMerchant =
       (process.env.SHOPEE_USE_MERCHANT || "false").toLowerCase() === "true";
@@ -103,87 +180,23 @@ export function shopeeAuthUrl(): string {
       ? "/api/v2/merchant/auth_partner"
       : "/api/v2/shop/auth_partner";
 
-    // create timestamp once and reuse (important!)
     const timestamp = ts();
-
-    // generateSignature menggunakan SHA256 plain (untuk auth_partner)
     const signature = generateSignature(partnerKey, partnerId, path, timestamp);
 
-    // Build URL
     const u = new URL(baseUrl() + path);
     u.searchParams.set("partner_id", partnerId);
     u.searchParams.set("timestamp", String(timestamp));
     u.searchParams.set("sign", signature);
     u.searchParams.set("redirect", redirect);
 
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== "production")
       console.log("✅ Final Auth URL:", u.toString());
-    }
 
     return u.toString();
-  } catch (error) {
-    console.error("❌ shopeeAuthUrl error:", error);
-    throw error;
+  } catch (err) {
+    console.error("❌ shopeeAuthUrl error:", err);
+    throw err;
   }
-}
-
-// Fungsi sign lama (untuk API lainnya) - tetap pertahankan
-function sign(
-  partnerKey: string,
-  path: string,
-  partnerId: string,
-  timestamp: number,
-  accessToken?: string | null,
-  shopOrMerchantId?: string | number | null
-) {
-  const partnerIdStr = String(partnerId).trim();
-  const pathStr = String(path).trim();
-  const tsStr = String(timestamp);
-
-  // build base string according to Shopee doc
-  const base =
-    partnerIdStr +
-    pathStr +
-    tsStr +
-    (accessToken || "") +
-    (shopOrMerchantId != null ? String(shopOrMerchantId) : "");
-
-  // normalize partnerKey
-  const keyRaw = (partnerKey ?? "").toString().trim();
-  if (!keyRaw) {
-    throw new Error("Shopee partner key is empty or not set in environment");
-  }
-
-  let keyBuf: Buffer | null = null;
-  const tryBase64 = (s: string) => {
-    try {
-      const buf = Buffer.from(s, "base64");
-      if (buf.length === 0) throw new Error("decoded base64 length 0");
-      return buf;
-    } catch {
-      return null;
-    }
-  };
-
-  keyBuf = tryBase64(keyRaw);
-  if (!keyBuf) {
-    const stripped = keyRaw
-      .replace(/^[^A-Za-z0-9]*/, "")
-      .replace(/^shpk[_-]?/i, "");
-    if (stripped !== keyRaw) {
-      keyBuf = tryBase64(stripped);
-    }
-  }
-
-  if (!keyBuf) {
-    keyBuf = Buffer.from(keyRaw, "utf8");
-  }
-
-  const hmac = crypto.createHmac("sha256", keyBuf);
-  hmac.update(base);
-  const digest = hmac.digest("hex");
-
-  return digest;
 }
 
 async function getAccountOrThrow(id: number) {
@@ -366,13 +379,18 @@ export async function shopeeGetOrders(chId: number, days = 3) {
   return data;
 }
 
+/**
+ * Exported function to update stock list on Shopee
+ * items: [{ item_id: string|number, stock: number }]
+ */
 export async function shopeeUpdateStock(
   chId: number,
-  items: Array<{ item_id: string; stock: number }>
+  items: Array<{ item_id: string | number; stock: number }>
 ) {
   const ch = await getAccountOrThrow(chId);
   const c = credsFromAccount(ch);
   await ensureValidToken(chId);
+
   const t = ts();
   const path = "/api/v2/product/stock/update";
   const useMerchant = !!c.merchantId;
@@ -396,6 +414,7 @@ export async function shopeeUpdateStock(
   else query.shop_id = c.shopId;
 
   const url = c.baseUrl + path + "?" + new URLSearchParams(query).toString();
+
   const body = {
     stock_list: items.map((i) => ({ item_id: i.item_id, stock: i.stock })),
   };

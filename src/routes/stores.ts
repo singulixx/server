@@ -9,36 +9,89 @@ router.use(authRequired);
 
 // WAS: async (_req, res) => { ... setCacheHeaders(req, res, ...) ... }
 // ✅ ROUTE DEBUG YANG DIPERBAIKI (tanpa import crypto langsung)
-router.get("/debug/shopee-sign", async (req, res) => {
+// Tambahkan di routes/stores.ts atau routes/channels.ts
+router.get("/debug/shopee-auth-full", async (req, res) => {
   try {
     const crypto = await import("node:crypto");
 
     const partnerId = process.env.SHOPEE_PARTNER_ID;
     const partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const redirectUrl = process.env.SHOPEE_REDIRECT_URL;
+    const useMerchant = process.env.SHOPEE_USE_MERCHANT === "true";
 
-    if (!partnerId || !partnerKey) {
+    if (!partnerId || !partnerKey || !redirectUrl) {
       return res.status(400).json({
         error: "Missing environment variables",
+        partnerId: !!partnerId,
+        partnerKey: !!partnerKey,
+        redirectUrl: !!redirectUrl,
       });
     }
 
     const timestamp = Math.floor(Date.now() / 1000);
-    const path = "/api/v2/shop/auth_partner";
+    const path = useMerchant
+      ? "/api/v2/merchant/auth_partner"
+      : "/api/v2/shop/auth_partner";
 
+    // Coba multiple signature methods
     const baseString = `${partnerId}${path}${timestamp}`;
 
-    // ALWAYS UTF-8 !!!
-    const keyBuffer = Buffer.from(partnerKey, "utf8");
+    // Method 1: HEX decoding (current approach)
+    const normalizedKey = partnerKey.replace(/^shpk/i, "").trim();
+    const keyBufferHex = Buffer.from(normalizedKey, "hex");
+    const hmacHex = crypto.createHmac("sha256", keyBufferHex);
+    hmacHex.update(baseString);
+    const signatureHex = hmacHex.digest("hex");
 
-    const hmac = crypto.createHmac("sha256", keyBuffer);
-    hmac.update(baseString);
-    const signature = hmac.digest("hex");
+    // Method 2: Raw string (UTF-8)
+    const keyBufferRaw = Buffer.from(partnerKey, "utf8");
+    const hmacRaw = crypto.createHmac("sha256", keyBufferRaw);
+    hmacRaw.update(baseString);
+    const signatureRaw = hmacRaw.digest("hex");
+
+    // Method 3: Without shpk prefix removal
+    const keyBufferOriginal = Buffer.from(partnerKey, "hex");
+    const hmacOriginal = crypto.createHmac("sha256", keyBufferOriginal);
+    hmacOriginal.update(baseString);
+    const signatureOriginal = hmacOriginal.digest("hex");
+
+    // Build final URL dengan method yang berbeda
+    const baseUrl =
+      process.env.SHOPEE_BASE_URL ||
+      "https://partner.test-stable.shopeemobile.com";
+
+    const urlHex = `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signatureHex}&redirect=${encodeURIComponent(
+      redirectUrl
+    )}`;
+    const urlRaw = `${baseUrl}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${signatureRaw}&redirect=${encodeURIComponent(
+      redirectUrl
+    )}`;
 
     res.json({
-      partnerId,
-      timestamp,
-      baseString,
-      generatedSignature: signature,
+      environment: {
+        partnerId,
+        partnerKeyLength: partnerKey.length,
+        partnerKeyPrefix: partnerKey.substring(0, 4),
+        redirectUrl,
+        useMerchant,
+        baseUrl,
+      },
+      signature: {
+        timestamp,
+        path,
+        baseString,
+        normalizedKey,
+        keyLength: normalizedKey.length,
+      },
+      signatures: {
+        hexMethod: signatureHex,
+        rawMethod: signatureRaw,
+        originalMethod: signatureOriginal,
+      },
+      testUrls: {
+        hexMethod: urlHex,
+        rawMethod: urlRaw,
+      },
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
