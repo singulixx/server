@@ -28,39 +28,10 @@ function ts() {
   return Math.floor(Date.now() / 1000);
 }
 
-
-function decodeShopeePartnerKey(partnerKey: string): Buffer {
-  const raw = (partnerKey || "").trim();
-  if (!raw) {
-    throw new Error("Missing Shopee partner key");
-  }
-
-  // Buang prefix umum seperti "shpk" atau "shpk_"
-  const withoutPrefix = raw.replace(/^shpk[_-]?/i, "");
-
-  // 1) Kalau isinya kelihatan seperti HEX, coba decode sebagai hex
-  if (/^[0-9a-fA-F]+$/.test(withoutPrefix) && withoutPrefix.length % 2 === 0) {
-    return Buffer.from(withoutPrefix, "hex");
-  }
-
-  // 2) Coba sebagai base64 (kalau user pakai format base64)
-  try {
-    const base64Buf = Buffer.from(withoutPrefix, "base64");
-    if (base64Buf.length > 0) {
-      return base64Buf;
-    }
-  } catch {
-    // ignore
-  }
-
-  // 3) Fallback: pakai sebagai plain UTF-8 text
-  return Buffer.from(withoutPrefix, "utf8");
-}
-
 // ✅ FUNCTION BARU UNTUK AUTH SHOPEE
 function generateSignature(partnerKey: string, partnerId: string, path: string, timestamp: number): string {
   const baseString = `${partnerId}${path}${timestamp}`;
-
+  
   console.log("🔐 Signature Debug:");
   console.log("Base String:", baseString);
   console.log("Partner ID:", partnerId);
@@ -68,17 +39,17 @@ function generateSignature(partnerKey: string, partnerId: string, path: string, 
   console.log("Timestamp:", timestamp);
   console.log("Partner Key Length:", partnerKey.length);
 
-  const keyBuffer = decodeShopeePartnerKey(partnerKey);
-  console.log("✅ Using decoded Shopee partner key (hex/base64/utf8)");
+  // Untuk Shopee, biasanya partner key digunakan sebagai plain text
+  const keyBuffer = Buffer.from(partnerKey, 'utf8');
+  console.log("✅ Using plain text key (UTF-8)");
 
   const hmac = crypto.createHmac('sha256', keyBuffer);
   hmac.update(baseString);
   const signature = hmac.digest('hex');
-
+  
   console.log("✅ Generated Signature:", signature);
   return signature;
 }
-
 
 /**
  * Debug function untuk memeriksa environment variables
@@ -167,7 +138,28 @@ function sign(
     throw new Error("Shopee partner key is empty or not set in environment");
   }
 
-  const keyBuf = decodeShopeePartnerKey(keyRaw);
+  let keyBuf: Buffer | null = null;
+  const tryBase64 = (s: string) => {
+    try {
+      const buf = Buffer.from(s, "base64");
+      if (buf.length === 0) throw new Error("decoded base64 length 0");
+      return buf;
+    } catch {
+      return null;
+    }
+  };
+
+  keyBuf = tryBase64(keyRaw);
+  if (!keyBuf) {
+    const stripped = keyRaw.replace(/^[^A-Za-z0-9]*/, "").replace(/^shpk[_-]?/i, "");
+    if (stripped !== keyRaw) {
+      keyBuf = tryBase64(stripped);
+    }
+  }
+
+  if (!keyBuf) {
+    keyBuf = Buffer.from(keyRaw, "utf8");
+  }
 
   const hmac = crypto.createHmac("sha256", keyBuf);
   hmac.update(base);
