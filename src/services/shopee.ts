@@ -112,6 +112,7 @@ export function shopeeAuthUrl(): string {
 }
 
 // Fungsi sign lama (untuk API lainnya) - tetap pertahankan
+
 function sign(
   partnerKey: string,
   path: string,
@@ -124,7 +125,8 @@ function sign(
   const pathStr = String(path).trim();
   const tsStr = String(timestamp);
 
-  // build base string according to Shopee doc
+  // build base string according to Shopee doc:
+  // base = partner_id + path + timestamp + access_token + shop_id/merchant_id (optional)
   const base =
     partnerIdStr +
     pathStr +
@@ -132,34 +134,13 @@ function sign(
     (accessToken || "") +
     (shopOrMerchantId != null ? String(shopOrMerchantId) : "");
 
-  // normalize partnerKey
   const keyRaw = (partnerKey ?? "").toString().trim();
   if (!keyRaw) {
     throw new Error("Shopee partner key is empty or not set in environment");
   }
 
-  let keyBuf: Buffer | null = null;
-  const tryBase64 = (s: string) => {
-    try {
-      const buf = Buffer.from(s, "base64");
-      if (buf.length === 0) throw new Error("decoded base64 length 0");
-      return buf;
-    } catch {
-      return null;
-    }
-  };
-
-  keyBuf = tryBase64(keyRaw);
-  if (!keyBuf) {
-    const stripped = keyRaw.replace(/^[^A-Za-z0-9]*/, "").replace(/^shpk[_-]?/i, "");
-    if (stripped !== keyRaw) {
-      keyBuf = tryBase64(stripped);
-    }
-  }
-
-  if (!keyBuf) {
-    keyBuf = Buffer.from(keyRaw, "utf8");
-  }
+  // Shopee partner key is treated as plain text (UTF-8)
+  const keyBuf = Buffer.from(keyRaw, "utf8");
 
   const hmac = crypto.createHmac("sha256", keyBuf);
   hmac.update(base);
