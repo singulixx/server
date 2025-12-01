@@ -74,6 +74,15 @@ app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+
+// Shopee OAuth callback alias (for SHOPEE_REDIRECT_URL pointing to /api/shopee/callback)
+// This simply forwards the request (with original query params) to the channels router handler.
+app.get("/api/shopee/callback", (req: Request, res: Response) => {
+  const qs = new URLSearchParams(req.query as any).toString();
+  const target = `/api/channels/oauth/shopee/callback${qs ? "?" + qs : ""}`;
+  res.redirect(target);
+});
+
 // ✅ Register semua route API
 app.use("/api/account", accountRouter);
 app.use("/api/audit", auditRouter);
